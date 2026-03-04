@@ -1,6 +1,7 @@
 services:
   organigram:
-    build: .
+    build:
+      context: https://github.com/NielHeesakkers/megawatt-organigram.git#main
     container_name: megawatt-organigram
     ports:
       - "3001:3001"
