@@ -136,6 +136,28 @@ async function main() {
 
   const [staff, strategy, concept, creation, commerce, client, project, experience, production, logistics] = teams;
 
+  // Link teams to their directors
+  const ceo = await prisma.executive.findFirst({ where: { level: 0 } });
+  const simon = await prisma.executive.findFirst({ where: { name: 'Simon Coolen' } });
+  const richard = await prisma.executive.findFirst({ where: { name: 'Richard Dillen' } });
+  const rachelle = await prisma.executive.findFirst({ where: { name: 'Rachelle Berkelaar' } });
+
+  if (ceo && simon && richard && rachelle) {
+    await Promise.all([
+      prisma.team.update({ where: { id: staff.id }, data: { executiveId: ceo.id } }),
+      prisma.team.update({ where: { id: strategy.id }, data: { executiveId: ceo.id } }),
+      prisma.team.update({ where: { id: production.id }, data: { executiveId: ceo.id } }),
+      prisma.team.update({ where: { id: logistics.id }, data: { executiveId: ceo.id } }),
+      prisma.team.update({ where: { id: concept.id }, data: { executiveId: simon.id } }),
+      prisma.team.update({ where: { id: creation.id }, data: { executiveId: simon.id } }),
+      prisma.team.update({ where: { id: commerce.id }, data: { executiveId: richard.id } }),
+      prisma.team.update({ where: { id: client.id }, data: { executiveId: rachelle.id } }),
+      prisma.team.update({ where: { id: project.id }, data: { executiveId: rachelle.id } }),
+      prisma.team.update({ where: { id: experience.id }, data: { executiveId: rachelle.id } }),
+    ]);
+    console.log('Team-executive mappings set');
+  }
+
   console.log('Processing member photos...');
 
   // All members data
