@@ -1,0 +1,19 @@
+services:
+  organigram:
+    build: .
+    container_name: megawatt-organigram
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=file:./dev.db
+      - JWT_SECRET=${JWT_SECRET:-megawatt-organigram-secret-2026}
+    volumes:
+      - db-data:/app/prisma
+      - uploads:/app/uploads
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  uploads:

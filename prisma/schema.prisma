@@ -1,0 +1,59 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Team {
+  id          Int        @id @default(autoincrement())
+  name        String
+  color       String     @default("#c9a84c")
+  order       Int
+  executiveId Int?
+  executive   Executive? @relation(fields: [executiveId], references: [id], onDelete: SetNull)
+  members     Member[]
+}
+
+model Member {
+  id         Int      @id @default(autoincrement())
+  name       String
+  role       String
+  email      String?
+  photo      String?
+  teamId     Int
+  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  isVacancy  Boolean  @default(false)
+  isTeamLead Boolean  @default(false)
+  order      Int
+  subGroup   String?
+}
+
+model Executive {
+  id    Int     @id @default(autoincrement())
+  name  String
+  role  String
+  photo String?
+  email String?
+  level Int
+  teams Team[]
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  action      String
+  entity      String
+  entityId    Int
+  changes     String
+  performedBy String   @default("admin")
+  createdAt   DateTime @default(now())
+}
+
+model Admin {
+  id           Int    @id @default(autoincrement())
+  username     String @unique
+  passwordHash String
+}
