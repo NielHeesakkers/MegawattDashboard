@@ -55,20 +55,20 @@ COPY server/lib/face_crop.py server/lib/face_crop.py
 RUN python3 -m venv /app/.venv && \
     /app/.venv/bin/pip install --no-cache-dir face-crop-plus
 
-# Create uploads dir
-RUN mkdir -p /app/uploads
+# Create data + uploads dirs
+RUN mkdir -p /app/data /app/uploads
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh .
 RUN chmod +x docker-entrypoint.sh
 
-# Persistent data volumes
-VOLUME ["/app/prisma", "/app/uploads"]
+# Only persistent DATA volumes (not prisma schema!)
+VOLUME ["/app/data", "/app/uploads"]
 
-# Environment
+# Environment — database lives in /app/data so volume doesn't overwrite prisma schema
 ENV NODE_ENV=production
 ENV PORT=3001
-ENV DATABASE_URL="file:./dev.db"
+ENV DATABASE_URL="file:/app/data/dev.db"
 
 EXPOSE 3001
 

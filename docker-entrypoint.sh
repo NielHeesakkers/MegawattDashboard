@@ -7,11 +7,11 @@ echo "=== Megawatt Organigram Starting ==="
 echo "Running database migrations..."
 npx prisma migrate deploy
 
-# Seed on first run (marker file in persistent volume)
-if [ ! -f /app/prisma/.seeded ]; then
+# Seed on first run (marker file in persistent data volume)
+if [ ! -f /app/data/.seeded ]; then
   echo "First run detected - seeding database..."
   if npx tsx prisma/seed.ts; then
-    touch /app/prisma/.seeded
+    touch /app/data/.seeded
     echo "Database seeded successfully."
   else
     echo "WARNING: Seeding failed - starting server anyway (you can seed manually later)"
