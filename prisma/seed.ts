@@ -106,10 +106,10 @@ async function main() {
 
   // Create executives with photos
   const execData = [
-    { name: 'Stephan Kwast', role: 'Chief Executive Officer', level: 0 },
-    { name: 'Simon Coolen', role: 'Executive Creative Director', level: 1 },
-    { name: 'Richard Dillen', role: 'Chief Commercial Officer', level: 1 },
-    { name: 'Rachelle Berkelaar', role: 'Operational Director', level: 1 },
+    { name: 'Stephan Kwast', role: 'Chief Executive Officer', level: 0, email: 's.kwast@megawatt.agency' },
+    { name: 'Simon Coolen', role: 'Executive Creative Director', level: 1, email: 's.coolen@megawatt.agency' },
+    { name: 'Richard Dillen', role: 'Chief Commercial Officer', level: 1, email: 'r.dillen@megawatt.agency' },
+    { name: 'Rachelle Berkelaar', role: 'Operational Director', level: 1, email: 'r.berkelaar@megawatt.agency' },
   ];
 
   for (const exec of execData) {
@@ -163,71 +163,71 @@ async function main() {
   // All members data
   const allMembers = [
     // Staff
-    { name: 'Gonnie Van der Kruijs', role: 'Finance & Control Manager', teamId: staff.id, order: 0, subGroup: 'Finance' },
-    { name: 'Jitte Kleinbekman', role: 'People Development Manager', teamId: staff.id, order: 1, subGroup: 'HR' },
-    { name: 'Lisa Timmermans', role: 'Management Assistent', teamId: staff.id, order: 2, subGroup: 'Office' },
+    { name: 'Gonnie Van der Kruijs', role: 'Finance & Control Manager', teamId: staff.id, order: 0, subGroup: 'Finance', email: 'g.vanderkruijs@megawatt.agency' },
+    { name: 'Jitte Kleinbekman', role: 'People Development Manager', teamId: staff.id, order: 1, subGroup: 'HR', email: 'j.kleinbekman@megawatt.agency' },
+    { name: 'Lisa Timmermans', role: 'Management Assistent', teamId: staff.id, order: 2, subGroup: 'Office', email: 'l.timmermans@megawatt.agency' },
     { name: 'Vacature', role: 'Marketing Stagiaire', teamId: staff.id, order: 3, subGroup: 'Marketing', isVacancy: true },
 
     // Strategy
-    { name: 'Bas van Heesch', role: 'Strateeg', teamId: strategy.id, order: 0 },
-    { name: 'Laura Beenders', role: 'Strateeg', teamId: strategy.id, order: 1 },
-    { name: 'Robin Nieuwkerk', role: 'Strateeg', teamId: strategy.id, order: 2 },
+    { name: 'Bas van Heesch', role: 'Strateeg', teamId: strategy.id, order: 0, email: 'b.vanheesch@megawatt.agency' },
+    { name: 'Laura Beenders', role: 'Strateeg', teamId: strategy.id, order: 1, email: 'l.beenders@megawatt.agency' },
+    { name: 'Robin Nieuwkerk', role: 'Strateeg', teamId: strategy.id, order: 2, email: 'r.nieuwkerk@megawatt.agency' },
     { name: 'Vacature', role: 'Strateeg', teamId: strategy.id, order: 3, isVacancy: true },
 
     // Concept
-    { name: 'Jesse van Maanen', role: 'Teamlead / Creative Director', teamId: concept.id, order: 0, isTeamLead: true },
-    { name: 'Bram van der Kroon', role: 'Creative Director', teamId: concept.id, order: 1 },
-    { name: 'Eva Storck', role: 'Concept Creative', teamId: concept.id, order: 2 },
-    { name: 'Ad van Ongeval', role: 'Concept Creative', teamId: concept.id, order: 3 },
-    { name: 'Joris Seghers', role: 'Concept Creative', teamId: concept.id, order: 4 },
-    { name: 'Bram van de Riet', role: 'Concept Creative', teamId: concept.id, order: 5 },
-    { name: 'Sem Roelofsma', role: 'Concept Creative', teamId: concept.id, order: 6 },
+    { name: 'Jesse van Maanen', role: 'Teamlead / Creative Director', teamId: concept.id, order: 0, isTeamLead: true, email: 'j.vanmaanen@megawatt.agency' },
+    { name: 'Bram van der Kroon', role: 'Creative Director', teamId: concept.id, order: 1, email: 'b.vanderkroon@megawatt.agency' },
+    { name: 'Eva Storck', role: 'Concept Creative', teamId: concept.id, order: 2, email: 'e.storck@megawatt.agency' },
+    { name: 'Ad van Ongeval', role: 'Concept Creative', teamId: concept.id, order: 3, email: 'a.vanongeval@megawatt.agency' },
+    { name: 'Joris Seghers', role: 'Concept Creative', teamId: concept.id, order: 4, email: 'j.seghers@megawatt.agency' },
+    { name: 'Bram van de Riet', role: 'Concept Creative', teamId: concept.id, order: 5, email: 'b.vanderiet@megawatt.agency' },
+    { name: 'Sem Roelofsma', role: 'Concept Creative', teamId: concept.id, order: 6, email: 's.roelofsma@megawatt.agency' },
     { name: 'Vacature', role: 'Concept Creative Stagiair Duo', teamId: concept.id, order: 7, isVacancy: true },
 
     // Creation
-    { name: 'Niel Heesakkers', role: 'Teamlead / Graphic & Motion', teamId: creation.id, order: 0, isTeamLead: true },
-    { name: 'Erik Muijsenberg', role: 'Digital & Motion Designer', teamId: creation.id, order: 1 },
-    { name: 'Sebastian van den Berg', role: 'Creative DTP', teamId: creation.id, order: 2 },
-    { name: 'Yetkin Nguyen', role: 'Social Creative', teamId: creation.id, order: 3 },
-    { name: 'Tim Savelkouls', role: 'Designer', teamId: creation.id, order: 4 },
+    { name: 'Niel Heesakkers', role: 'Teamlead / Graphic & Motion', teamId: creation.id, order: 0, isTeamLead: true, email: 'n.heesakkers@megawatt.agency' },
+    { name: 'Erik Muijsenberg', role: 'Digital & Motion Designer', teamId: creation.id, order: 1, email: 'e.muijsenberg@megawatt.agency' },
+    { name: 'Sebastian van den Berg', role: 'Creative DTP', teamId: creation.id, order: 2, email: 's.vandenberg@megawatt.agency' },
+    { name: 'Yetkin Nguyen', role: 'Social Creative', teamId: creation.id, order: 3, email: 'y.nguyen@megawatt.agency' },
+    { name: 'Tim Savelkouls', role: 'Designer', teamId: creation.id, order: 4, email: 't.savelkouls@megawatt.agency' },
 
     // Commerce
-    { name: 'Richard Gravemaker', role: 'Account Director', teamId: commerce.id, order: 0 },
-    { name: 'Niels Sasharias', role: 'Account Director', teamId: commerce.id, order: 1 },
+    { name: 'Richard Gravemaker', role: 'Account Director', teamId: commerce.id, order: 0, email: 'r.gravemaker@megawatt.agency' },
+    { name: 'Niels Sasharias', role: 'Account Director', teamId: commerce.id, order: 1, email: 'n.sasharias@megawatt.agency' },
     { name: 'Vacature', role: 'Account Director', teamId: commerce.id, order: 2, isVacancy: true },
 
     // Client
-    { name: 'Tessa Maas', role: 'Client Lead', teamId: client.id, order: 0 },
-    { name: 'Bram van der Burgt', role: 'Client Lead', teamId: client.id, order: 1 },
-    { name: 'Bo Verbiest', role: 'Client Lead', teamId: client.id, order: 2 },
+    { name: 'Tessa Maas', role: 'Client Lead', teamId: client.id, order: 0, email: 't.maas@megawatt.agency' },
+    { name: 'Bram van der Burgt', role: 'Client Lead', teamId: client.id, order: 1, email: 'b.vanderburgt@megawatt.agency' },
+    { name: 'Bo Verbiest', role: 'Client Lead', teamId: client.id, order: 2, email: 'b.verbiest@megawatt.agency' },
 
     // Project
-    { name: 'Debby de Jonge', role: 'Teamlead', teamId: project.id, order: 0, isTeamLead: true },
-    { name: 'Manon Heijens', role: 'Senior Projectmanager', teamId: project.id, order: 1 },
-    { name: 'Pieter Claessens', role: 'Senior Projectmanager', teamId: project.id, order: 2 },
-    { name: 'Amber Franken', role: 'Projectmanager', teamId: project.id, order: 3 },
-    { name: 'Paulien Kersjes', role: 'Projectmanager', teamId: project.id, order: 4 },
-    { name: 'Lynn Verhoeven', role: 'Junior Projectmanager', teamId: project.id, order: 5 },
-    { name: 'Floortje Levering', role: 'Projectmanager', teamId: project.id, order: 6 },
-    { name: 'Maxime van der Griendt', role: 'Projectmanager', teamId: project.id, order: 7 },
+    { name: 'Debby de Jonge', role: 'Teamlead', teamId: project.id, order: 0, isTeamLead: true, email: 'd.dejonge@megawatt.agency' },
+    { name: 'Manon Heijens', role: 'Senior Projectmanager', teamId: project.id, order: 1, email: 'm.heijens@megawatt.agency' },
+    { name: 'Pieter Claessens', role: 'Senior Projectmanager', teamId: project.id, order: 2, email: 'p.claessens@megawatt.agency' },
+    { name: 'Amber Franken', role: 'Projectmanager', teamId: project.id, order: 3, email: 'a.franken@megawatt.agency' },
+    { name: 'Paulien Kersjes', role: 'Projectmanager', teamId: project.id, order: 4, email: 'p.kersjes@megawatt.agency' },
+    { name: 'Lynn Verhoeven', role: 'Junior Projectmanager', teamId: project.id, order: 5, email: 'l.verhoeven@megawatt.agency' },
+    { name: 'Floortje Levering', role: 'Projectmanager', teamId: project.id, order: 6, email: 'f.levering@megawatt.agency' },
+    { name: 'Maxime van der Griendt', role: 'Projectmanager', teamId: project.id, order: 7, email: 'm.vandergriendt@megawatt.agency' },
     { name: 'Vacature', role: 'Projectmanager', teamId: project.id, order: 8, isVacancy: true },
     { name: 'Vacature', role: 'Projectmanager Stagiair', teamId: project.id, order: 9, isVacancy: true },
 
     // Experience
-    { name: 'Manon Hermans', role: 'Experience Manager', teamId: experience.id, order: 0 },
-    { name: 'Stacey Schleenstein', role: 'Experience Manager', teamId: experience.id, order: 1 },
+    { name: 'Manon Hermans', role: 'Experience Manager', teamId: experience.id, order: 0, email: 'm.hermans@megawatt.agency' },
+    { name: 'Stacey Schleenstein', role: 'Experience Manager', teamId: experience.id, order: 1, email: 's.schleenstein@megawatt.agency' },
 
     // Production
-    { name: 'Rob Vercoelen', role: 'Senior Producer', teamId: production.id, order: 0 },
-    { name: 'Mick Mulder', role: 'Producer', teamId: production.id, order: 1 },
-    { name: 'Doyke van Genechten', role: 'Producer', teamId: production.id, order: 2 },
-    { name: 'Dirk Coolen', role: '3D Visualizer', teamId: production.id, order: 3 },
+    { name: 'Rob Vercoelen', role: 'Senior Producer', teamId: production.id, order: 0, email: 'r.vercoelen@megawatt.agency' },
+    { name: 'Mick Mulder', role: 'Producer', teamId: production.id, order: 1, email: 'm.mulder@megawatt.agency' },
+    { name: 'Doyke van Genechten', role: 'Producer', teamId: production.id, order: 2, email: 'd.vangenechten@megawatt.agency' },
+    { name: 'Dirk Coolen', role: '3D Visualizer', teamId: production.id, order: 3, email: 'd.coolen@megawatt.agency' },
     { name: 'Vacature', role: 'Producer', teamId: production.id, order: 4, isVacancy: true },
 
     // Logistics
-    { name: 'Stuie Franken', role: 'Teamlead / Logistics Manager', teamId: logistics.id, order: 0, isTeamLead: true },
-    { name: 'Nordin Bihaki', role: 'Logistics', teamId: logistics.id, order: 1 },
-    { name: 'Romano Henar', role: 'Logistics', teamId: logistics.id, order: 2 },
+    { name: 'Stuie Franken', role: 'Teamlead / Logistics Manager', teamId: logistics.id, order: 0, isTeamLead: true, email: 's.franken@megawatt.agency' },
+    { name: 'Nordin Bihaki', role: 'Logistics', teamId: logistics.id, order: 1, email: 'n.bihaki@megawatt.agency' },
+    { name: 'Romano Henar', role: 'Logistics', teamId: logistics.id, order: 2, email: 'r.henar@megawatt.agency' },
   ];
 
   for (const member of allMembers) {
@@ -241,6 +241,7 @@ async function main() {
         subGroup: member.subGroup || null,
         isVacancy: member.isVacancy || false,
         isTeamLead: member.isTeamLead || false,
+        email: member.email || null,
         photo,
       },
     });
