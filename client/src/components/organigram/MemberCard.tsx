@@ -45,11 +45,6 @@ export default function MemberCard({ member, onClick, isHighlighted, isDimmed }:
         <p className={`text-[11px] leading-tight mt-0.5 truncate ${isVacancy ? 'italic text-text-muted' : 'text-text-secondary'}`}>
           {member.role}
         </p>
-        {!isVacancy && member.email && (
-          <p className="text-[9px] leading-tight mt-0.5 truncate text-text-muted">
-            {member.email}
-          </p>
-        )}
       </div>
     </button>
   );

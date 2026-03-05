@@ -54,7 +54,7 @@ export default function MemberModal({ member, onClose }: MemberModalProps) {
 
         {/* Team badge */}
         {member.team && (
-          <span className="inline-block px-3 py-1 rounded-full text-xs font-medium mb-3 bg-accent-teal-dim text-accent-teal">
+          <span className="inline-block px-3 py-1 rounded-full text-xs font-medium mt-[15px] mb-3 bg-accent-teal-dim text-accent-teal">
             {member.team.name}
           </span>
         )}

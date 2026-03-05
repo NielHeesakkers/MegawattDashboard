@@ -1,6 +1,17 @@
 # MEGAWATT Organigram
 
-Interactive company organigram for Megawatt Agency. Dark-themed web app with hierarchical visualization, search, PDF export, and admin panel.
+Interactief organigram voor Megawatt Agency. Dark-themed web app met hiërarchische visualisatie van directie, teams en medewerkers.
+
+### Functionaliteiten
+
+- **Organigram** — Visueel overzicht van CEO, directie, teams en medewerkers met foto's
+- **Zoeken** — Zoek op naam of functie, met highlight van resultaten
+- **Contactgegevens** — Klik op een medewerker of directielid voor e-mail en telefoon
+- **PDF Export** — Download het organigram als PDF
+- **Admin panel** — Beheer teams, medewerkers, directieleden en admin gebruikers
+- **Foto management** — Upload foto's met automatische face-crop
+- **Backup** — Export en import van alle data als ZIP, inclusief foto's
+- **Drag & drop** — Herorden teams en medewerkers via drag & drop in het admin panel
 
 ## Stack
 
