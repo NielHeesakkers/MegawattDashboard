@@ -77,6 +77,8 @@ export default function ExecutiveManager() {
     if (!file) return;
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
+    setRemovePhoto(false);
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
