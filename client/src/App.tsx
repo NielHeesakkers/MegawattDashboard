@@ -7,6 +7,7 @@ import TeamManager from './components/admin/TeamManager';
 import MemberManager from './components/admin/MemberManager';
 import ExecutiveManager from './components/admin/ExecutiveManager';
 import AuditLog from './components/admin/AuditLog';
+import UserManager from './components/admin/UserManager';
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="teams" element={<TeamManager />} />
           <Route path="members" element={<MemberManager />} />
           <Route path="executives" element={<ExecutiveManager />} />
+          <Route path="users" element={<UserManager />} />
           <Route path="audit" element={<AuditLog />} />
         </Route>
       </Routes>

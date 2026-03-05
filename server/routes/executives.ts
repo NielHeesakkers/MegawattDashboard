@@ -22,12 +22,13 @@ router.post(
   upload.single('photo'),
   processPhoto,
   async (req: AuthRequest, res: Response) => {
-    const { name, role, email, photo, level } = req.body;
+    const { name, role, email, phone, photo, level } = req.body;
     const exec = await prisma.executive.create({
       data: {
         name,
         role,
         email: email || null,
+        phone: phone || null,
         photo: photo || null,
         level: Number(level) || 1,
       },
@@ -48,11 +49,13 @@ router.put(
     const existing = await prisma.executive.findUnique({ where: { id } });
     if (!existing) { res.status(404).json({ error: 'Executive not found' }); return; }
 
-    const { name, role, email, photo, level } = req.body;
+    const { name, role, email, phone, photo, removePhoto, level } = req.body;
 
-    if (photo && existing.photo) {
+    if ((photo || removePhoto === 'true') && existing.photo) {
       deletePhoto(existing.photo);
     }
+
+    const resolvedPhoto = removePhoto === 'true' ? null : (photo ?? existing.photo);
 
     const exec = await prisma.executive.update({
       where: { id },
@@ -60,7 +63,8 @@ router.put(
         name: name ?? existing.name,
         role: role ?? existing.role,
         email: email !== undefined ? (email || null) : existing.email,
-        photo: photo ?? existing.photo,
+        phone: phone !== undefined ? (phone || null) : existing.phone,
+        photo: resolvedPhoto,
         level: level !== undefined ? Number(level) : existing.level,
       },
     });

@@ -32,7 +32,7 @@ export default function Modal({ isOpen, onClose, children, title, maxWidth = 'ma
     <div
       ref={overlayRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(0,0,0,0.6)] backdrop-blur-[4px] p-4"
-      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+      onMouseDown={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
       <div
         className={`bg-[#1a3a38] rounded-[12px] w-full ${maxWidth} max-h-[90vh] overflow-y-auto`}

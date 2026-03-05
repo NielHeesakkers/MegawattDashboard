@@ -16,6 +16,16 @@ router.get('/', async (_req: Request, res: Response) => {
   res.json(members);
 });
 
+// Admin: reorder members (batch) — must be above /:id to avoid being caught by it
+router.put('/reorder/batch', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { orders } = req.body as { orders: { id: number; order: number }[] };
+  await Promise.all(
+    orders.map(({ id, order }) => prisma.member.update({ where: { id }, data: { order } }))
+  );
+  await logAudit('UPDATE', 'Member', 0, { action: 'reorder', orders }, req.adminUsername);
+  res.json({ success: true });
+});
+
 // Admin: create member
 router.post(
   '/',
@@ -23,12 +33,13 @@ router.post(
   upload.single('photo'),
   processPhoto,
   async (req: AuthRequest, res: Response) => {
-    const { name, role, email, photo, teamId, isVacancy, isTeamLead, order, subGroup } = req.body;
+    const { name, role, email, phone, photo, teamId, isVacancy, isTeamLead, order, subGroup } = req.body;
     const member = await prisma.member.create({
       data: {
         name,
         role,
         email: email || null,
+        phone: phone || null,
         photo: photo || null,
         teamId: Number(teamId),
         isVacancy: isVacancy === 'true' || isVacancy === true,
@@ -54,12 +65,14 @@ router.put(
     const existing = await prisma.member.findUnique({ where: { id } });
     if (!existing) { res.status(404).json({ error: 'Member not found' }); return; }
 
-    const { name, role, email, photo, teamId, isVacancy, isTeamLead, order, subGroup } = req.body;
+    const { name, role, email, phone, photo, removePhoto, teamId, isVacancy, isTeamLead, order, subGroup } = req.body;
 
-    // Delete old photo if new one uploaded
-    if (photo && existing.photo) {
+    // Delete old photo if new one uploaded or explicitly removed
+    if ((photo || removePhoto === 'true') && existing.photo) {
       deletePhoto(existing.photo);
     }
+
+    const resolvedPhoto = removePhoto === 'true' ? null : (photo ?? existing.photo);
 
     const member = await prisma.member.update({
       where: { id },
@@ -67,7 +80,8 @@ router.put(
         name: name ?? existing.name,
         role: role ?? existing.role,
         email: email !== undefined ? (email || null) : existing.email,
-        photo: photo ?? existing.photo,
+        phone: phone !== undefined ? (phone || null) : existing.phone,
+        photo: resolvedPhoto,
         teamId: teamId ? Number(teamId) : existing.teamId,
         isVacancy: isVacancy !== undefined ? (isVacancy === 'true' || isVacancy === true) : existing.isVacancy,
         isTeamLead: isTeamLead !== undefined ? (isTeamLead === 'true' || isTeamLead === true) : existing.isTeamLead,
@@ -80,16 +94,6 @@ router.put(
     res.json(member);
   }
 );
-
-// Admin: reorder members (batch)
-router.put('/reorder/batch', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const { orders } = req.body as { orders: { id: number; order: number }[] };
-  await Promise.all(
-    orders.map(({ id, order }) => prisma.member.update({ where: { id }, data: { order } }))
-  );
-  await logAudit('UPDATE', 'Member', 0, { action: 'reorder', orders }, req.adminUsername);
-  res.json({ success: true });
-});
 
 // Admin: delete member
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {

@@ -37,12 +37,20 @@ export default function MemberModal({ member, onClose }: MemberModalProps) {
         {member.email && !member.isVacancy && (
           <a
             href={`mailto:${member.email}`}
-            className="text-accent-teal hover:underline text-sm mb-3"
+            className="text-accent-teal hover:underline text-sm"
           >
             {member.email}
           </a>
         )}
-        {(!member.email || member.isVacancy) && <div className="mb-2" />}
+        {member.phone && !member.isVacancy && (
+          <a
+            href={`tel:${member.phone}`}
+            className="text-text-secondary hover:text-white text-sm mb-3"
+          >
+            {member.phone}
+          </a>
+        )}
+        {(!member.email && !member.phone || member.isVacancy) && <div className="mb-2" />}
 
         {/* Team badge */}
         {member.team && (

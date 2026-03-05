@@ -3,6 +3,7 @@ import { fetchTeams, fetchExecutives, Team, Executive, Member } from '../../api'
 import { ExecutiveCard, matchesSearch } from './ExecutiveSection';
 import TeamColumn from './TeamColumn';
 import MemberModal from './MemberModal';
+import ExecutiveModal from './ExecutiveModal';
 import SearchBar from './SearchBar';
 
 function MegawattLogo() {
@@ -21,6 +22,7 @@ export default function OrganigramPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [executives, setExecutives] = useState<Executive[]>([]);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [selectedExec, setSelectedExec] = useState<Executive | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const captureRef = useRef<HTMLDivElement>(null);
@@ -204,6 +206,8 @@ export default function OrganigramPage() {
               exec={ceo}
               isHighlighted={hasSearch && matchesSearch(ceo, searchQuery)}
               isDimmed={hasSearch && !matchesSearch(ceo, searchQuery)}
+              onClick={setSelectedExec}
+              hasAccent={0.10}
             />
           )}
           <div className="w-0.5 h-8 bg-accent" />
@@ -245,6 +249,8 @@ export default function OrganigramPage() {
                           exec={branch.director}
                           isHighlighted={hasSearch && matchesSearch(branch.director, searchQuery)}
                           isDimmed={hasSearch && !matchesSearch(branch.director, searchQuery)}
+                          onClick={setSelectedExec}
+                          hasAccent={0.09}
                         />
                       </div>
                       <div className="w-0.5 flex-1 bg-accent" />
@@ -302,6 +308,7 @@ export default function OrganigramPage() {
       </div>
 
       <MemberModal member={selectedMember} onClose={() => setSelectedMember(null)} />
+      <ExecutiveModal executive={selectedExec} onClose={() => setSelectedExec(null)} />
     </div>
   );
 }

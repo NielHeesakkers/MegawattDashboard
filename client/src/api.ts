@@ -13,6 +13,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Auto-logout on expired/invalid token
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && localStorage.getItem('token')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('username');
+      window.location.href = '/admin';
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Types
 export interface Team {
   id: number;
@@ -29,6 +42,7 @@ export interface Member {
   name: string;
   role: string;
   email: string | null;
+  phone: string | null;
   photo: string | null;
   teamId: number;
   team?: Team;
@@ -44,7 +58,13 @@ export interface Executive {
   role: string;
   photo: string | null;
   email: string | null;
+  phone: string | null;
   level: number;
+}
+
+export interface AdminUser {
+  id: number;
+  username: string;
 }
 
 export interface AuditLogEntry {
@@ -82,9 +102,45 @@ export const createExecutive = (data: FormData) => api.post<Executive>('/executi
 export const updateExecutive = (id: number, data: FormData) => api.put<Executive>(`/executives/${id}`, data).then((r) => r.data);
 export const deleteExecutive = (id: number) => api.delete(`/executives/${id}`);
 
+export const fetchAdminUsers = () => api.get<AdminUser[]>('/auth/users').then((r) => r.data);
+export const createAdminUser = (data: { username: string; password: string }) =>
+  api.post<AdminUser>('/auth/users', data).then((r) => r.data);
+export const updateAdminUser = (id: number, data: { username?: string; password?: string }) =>
+  api.put<AdminUser>(`/auth/users/${id}`, data).then((r) => r.data);
+export const deleteAdminUser = (id: number) => api.delete(`/auth/users/${id}`);
+
 export const fetchAuditLogs = (page = 1, limit = 50) =>
   api.get<{ logs: AuditLogEntry[]; total: number; page: number; pages: number }>(
     `/audit-logs?page=${page}&limit=${limit}`
+  ).then((r) => r.data);
+
+// Backup operations
+export const exportBackup = () =>
+  api.get('/backup/export', { responseType: 'blob' }).then((r) => {
+    const url = window.URL.createObjectURL(r.data);
+    const a = document.createElement('a');
+    a.href = url;
+    const disposition = r.headers['content-disposition'];
+    a.download = disposition
+      ? disposition.split('filename=')[1]?.replace(/"/g, '') || 'megawatt-backup.zip'
+      : `megawatt-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  });
+
+export const importBackup = (file: File) => {
+  const fd = new FormData();
+  fd.append('backup', file);
+  return api.post<{ success: boolean; imported: { executives: number; teams: number; members: number } }>(
+    '/backup/import', fd
+  ).then((r) => r.data);
+};
+
+export const clearAllData = () =>
+  api.delete<{ success: boolean; deleted: { members: number; teams: number; executives: number } }>(
+    '/backup/clear'
   ).then((r) => r.data);
 
 export default api;

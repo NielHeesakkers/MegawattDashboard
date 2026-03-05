@@ -25,6 +25,16 @@ router.get('/:id', async (req: Request, res: Response) => {
   res.json(team);
 });
 
+// Admin: reorder teams (batch) — must be above /:id to avoid being caught by it
+router.put('/reorder/batch', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { orders } = req.body as { orders: { id: number; order: number }[] };
+  await Promise.all(
+    orders.map(({ id, order }) => prisma.team.update({ where: { id }, data: { order } }))
+  );
+  await logAudit('UPDATE', 'Team', 0, { action: 'reorder', orders }, req.adminUsername);
+  res.json({ success: true });
+});
+
 // Admin: create team
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { name, color, order, executiveId } = req.body;
@@ -57,16 +67,6 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   });
   await logAudit('UPDATE', 'Team', id, { name, color, order, executiveId }, req.adminUsername);
   res.json(team);
-});
-
-// Admin: reorder teams (batch)
-router.put('/reorder/batch', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const { orders } = req.body as { orders: { id: number; order: number }[] };
-  await Promise.all(
-    orders.map(({ id, order }) => prisma.team.update({ where: { id }, data: { order } }))
-  );
-  await logAudit('UPDATE', 'Team', 0, { action: 'reorder', orders }, req.adminUsername);
-  res.json({ success: true });
 });
 
 // Admin: delete team

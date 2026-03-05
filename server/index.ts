@@ -17,6 +17,7 @@ import teamRoutes from './routes/teams';
 import memberRoutes from './routes/members';
 import executiveRoutes from './routes/executives';
 import auditRoutes from './routes/audit';
+import backupRoutes from './routes/backup';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -31,6 +32,7 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/members', memberRoutes);
 app.use('/api/executives', executiveRoutes);
 app.use('/api/audit-logs', auditRoutes);
+app.use('/api/backup', backupRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

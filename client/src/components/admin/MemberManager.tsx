@@ -25,6 +25,7 @@ interface MemberFormData {
   name: string;
   role: string;
   email: string;
+  phone: string;
   teamId: string;
   isVacancy: boolean;
   isTeamLead: boolean;
@@ -32,7 +33,7 @@ interface MemberFormData {
 }
 
 const emptyForm: MemberFormData = {
-  name: '', role: '', email: '', teamId: '', isVacancy: false, isTeamLead: false, subGroup: '',
+  name: '', role: '', email: '', phone: '', teamId: '', isVacancy: false, isTeamLead: false, subGroup: '',
 };
 
 function SortableMemberRow({ member, onEdit, onDelete }: { member: Member; onEdit: (m: Member) => void; onDelete: (m: Member) => void }) {
@@ -85,6 +86,7 @@ export default function MemberManager() {
   const [deletingMember, setDeletingMember] = useState<Member | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
   const [filterTeam, setFilterTeam] = useState<string>(searchParams.get('team') || 'all');
   const [customSubGroup, setCustomSubGroup] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -123,6 +125,7 @@ export default function MemberManager() {
     setEditingId(null);
     setPhotoFile(null);
     setPhotoPreview(null);
+    setRemovePhoto(false);
     setCustomSubGroup(false);
     setShowForm(true);
   };
@@ -133,6 +136,7 @@ export default function MemberManager() {
       name: m.name,
       role: m.role,
       email: m.email || '',
+      phone: m.phone || '',
       teamId: String(m.teamId),
       isVacancy: m.isVacancy,
       isTeamLead: m.isTeamLead,
@@ -141,6 +145,7 @@ export default function MemberManager() {
     setEditingId(m.id);
     setPhotoFile(null);
     setPhotoPreview(m.photo || null);
+    setRemovePhoto(false);
     setCustomSubGroup(!!m.subGroup && !isExisting);
     setShowForm(true);
   };
@@ -161,11 +166,13 @@ export default function MemberManager() {
       fd.append('name', form.name);
       fd.append('role', form.role);
       fd.append('email', form.email);
+      fd.append('phone', form.phone);
       fd.append('teamId', form.teamId);
       fd.append('isVacancy', String(form.isVacancy));
       fd.append('isTeamLead', String(form.isTeamLead));
       fd.append('subGroup', form.subGroup);
       if (photoFile) fd.append('photo', photoFile);
+      if (removePhoto) fd.append('removePhoto', 'true');
 
       if (editingId) {
         await updateMember(editingId, fd);
@@ -329,8 +336,8 @@ export default function MemberManager() {
               className="hidden"
             />
             <div
-              onClick={() => fileRef.current?.click()}
               className="shrink-0 w-[140px] h-[140px] rounded-full overflow-hidden bg-bg-dark border-2 border-white/10 hover:border-accent-gold cursor-pointer transition-colors group relative"
+              onClick={() => !photoPreview && fileRef.current?.click()}
             >
               {photoPreview ? (
                 <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
@@ -341,11 +348,20 @@ export default function MemberManager() {
                   </svg>
                 </div>
               )}
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
-                </svg>
+              <div className={`absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity ${photoPreview ? 'gap-6' : ''}`}>
+                <button type="button" onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }} className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors" title="Nieuwe foto">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
+                  </svg>
+                </button>
+                {photoPreview && (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setPhotoPreview(null); setPhotoFile(null); setRemovePhoto(true); }} className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors" title="Foto verwijderen">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex-1 space-y-3">
@@ -372,6 +388,13 @@ export default function MemberManager() {
             <label className="block text-text-secondary text-sm mb-1">E-mail</label>
             <input
               type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
+            />
+          </div>
+          <div>
+            <label className="block text-text-secondary text-sm mb-1">Telefoon</label>
+            <input
+              type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
               className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
             />
           </div>

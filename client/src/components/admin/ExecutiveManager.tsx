@@ -7,10 +7,11 @@ interface ExecFormData {
   name: string;
   role: string;
   email: string;
+  phone: string;
   level: string;
 }
 
-const emptyForm: ExecFormData = { name: '', role: '', email: '', level: '1' };
+const emptyForm: ExecFormData = { name: '', role: '', email: '', phone: '', level: '1' };
 
 function ExecRow({ exec, onEdit, onDelete }: { exec: Executive; onEdit: (e: Executive) => void; onDelete: (e: Executive) => void }) {
   return (
@@ -46,6 +47,7 @@ export default function ExecutiveManager() {
   const [deleting, setDeleting] = useState<Executive | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -57,14 +59,16 @@ export default function ExecutiveManager() {
     setEditingId(null);
     setPhotoFile(null);
     setPhotoPreview(null);
+    setRemovePhoto(false);
     setShowForm(true);
   };
 
   const openEdit = (e: Executive) => {
-    setForm({ name: e.name, role: e.role, email: e.email || '', level: String(e.level) });
+    setForm({ name: e.name, role: e.role, email: e.email || '', phone: e.phone || '', level: String(e.level) });
     setEditingId(e.id);
     setPhotoFile(null);
     setPhotoPreview(e.photo || null);
+    setRemovePhoto(false);
     setShowForm(true);
   };
 
@@ -84,8 +88,10 @@ export default function ExecutiveManager() {
       fd.append('name', form.name);
       fd.append('role', form.role);
       fd.append('email', form.email);
+      fd.append('phone', form.phone);
       fd.append('level', form.level);
       if (photoFile) fd.append('photo', photoFile);
+      if (removePhoto) fd.append('removePhoto', 'true');
 
       if (editingId) {
         await updateExecutive(editingId, fd);
@@ -146,8 +152,8 @@ export default function ExecutiveManager() {
               className="hidden"
             />
             <div
-              onClick={() => fileRef.current?.click()}
               className="shrink-0 w-[140px] h-[140px] rounded-full overflow-hidden bg-bg-dark border-2 border-white/10 hover:border-accent-gold cursor-pointer transition-colors group relative"
+              onClick={() => !photoPreview && fileRef.current?.click()}
             >
               {photoPreview ? (
                 <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
@@ -158,11 +164,20 @@ export default function ExecutiveManager() {
                   </svg>
                 </div>
               )}
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
-                </svg>
+              <div className={`absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity ${photoPreview ? 'gap-6' : ''}`}>
+                <button type="button" onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }} className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors" title="Nieuwe foto">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
+                  </svg>
+                </button>
+                {photoPreview && (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setPhotoPreview(null); setPhotoFile(null); setRemovePhoto(true); }} className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors" title="Foto verwijderen">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex-1 space-y-3">
@@ -189,6 +204,13 @@ export default function ExecutiveManager() {
             <label className="block text-text-secondary text-sm mb-1">E-mail</label>
             <input
               type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
+            />
+          </div>
+          <div>
+            <label className="block text-text-secondary text-sm mb-1">Telefoon</label>
+            <input
+              type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
               className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
             />
           </div>

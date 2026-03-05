@@ -23,6 +23,7 @@ model Member {
   name       String
   role       String
   email      String?
+  phone      String?
   photo      String?
   teamId     Int
   team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -38,6 +39,7 @@ model Executive {
   role  String
   photo String?
   email String?
+  phone String?
   level Int
   teams Team[]
 }

@@ -56,6 +56,7 @@ const navItems = [
   { to: '/admin', label: 'Dashboard' },
   { to: '/admin/members', label: 'Medewerkers' },
   { to: '/admin/executives', label: 'Directie' },
+  { to: '/admin/users', label: 'Gebruikers' },
   { to: '/admin/audit', label: 'Audit Log' },
 ];
 
@@ -90,7 +91,13 @@ export default function AdminLayout() {
         </nav>
         <div className="flex-shrink-0 pt-3 border-t border-[rgba(255,255,255,0.08)] mt-auto">
           <p className="text-text-muted text-xs mb-2">Ingelogd als {username}</p>
-          <button onClick={logout} className="text-sm text-danger hover:opacity-80 cursor-pointer">
+          <button
+            onClick={logout}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-[6px] bg-red-500/10 border border-red-500/20 text-red-400 text-[13px] font-medium hover:bg-red-500/20 hover:text-red-300 transition-all duration-150 cursor-pointer"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+            </svg>
             Uitloggen
           </button>
         </div>

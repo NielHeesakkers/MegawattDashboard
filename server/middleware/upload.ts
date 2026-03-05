@@ -48,7 +48,7 @@ export async function processPhoto(req: Request, _res: Response, next: NextFunct
     // Write buffer to temp file for face-crop-plus
     fs.writeFileSync(tmpInput, req.file.buffer);
 
-    await execFileAsync(PYTHON_BIN, [FACE_CROP_SCRIPT, tmpInput, outputPath, '200', '0.55'], {
+    await execFileAsync(PYTHON_BIN, [FACE_CROP_SCRIPT, tmpInput, outputPath, '200', '0.4'], {
       timeout: 30000,
     });
 

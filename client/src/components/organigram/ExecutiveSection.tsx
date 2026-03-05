@@ -6,16 +6,25 @@ export function matchesSearch(exec: Executive, query: string): boolean {
   return exec.name.toLowerCase().includes(q) || exec.role.toLowerCase().includes(q);
 }
 
-export function ExecutiveCard({ exec, isHighlighted, isDimmed }: { exec: Executive; isHighlighted: boolean; isDimmed: boolean }) {
+export function ExecutiveCard({ exec, isHighlighted, isDimmed, onClick, hasAccent }: { exec: Executive; isHighlighted: boolean; isDimmed: boolean; onClick?: (exec: Executive) => void; hasAccent?: number }) {
   return (
-    <div
+    <button
+      onClick={() => onClick?.(exec)}
       className={`
-        flex flex-col items-center p-4 rounded-[10px] bg-bg-card border border-border
-        transition-all duration-150
+        flex flex-col items-center p-4 rounded-[10px]
+        transition-all duration-150 cursor-pointer
+        ${hasAccent
+          ? 'border border-accent/70 hover:border-accent/90'
+          : 'bg-bg-card border border-border'}
         ${isHighlighted ? 'ring-2 ring-accent border-accent bg-accent-dim' : ''}
         ${isDimmed ? 'opacity-30' : ''}
       `}
-      style={{ animation: 'slideUp 0.3s ease-out' }}
+      style={{
+        animation: 'slideUp 0.3s ease-out',
+        ...(hasAccent ? { backgroundColor: `rgba(255,255,255,${hasAccent})` } : {}),
+      }}
+      onMouseEnter={(e) => { if (hasAccent) e.currentTarget.style.backgroundColor = `rgba(255,255,255,${hasAccent + 0.05})`; }}
+      onMouseLeave={(e) => { if (hasAccent) e.currentTarget.style.backgroundColor = `rgba(255,255,255,${hasAccent})`; }}
     >
       <div className="w-16 h-16 rounded-full overflow-hidden bg-[rgba(0,0,0,0.2)] mb-2">
         {exec.photo ? (
@@ -30,6 +39,6 @@ export function ExecutiveCard({ exec, isHighlighted, isDimmed }: { exec: Executi
       </div>
       <p className="text-sm font-semibold text-text-primary text-center">{exec.name}</p>
       <p className="text-xs text-accent-teal text-center">{exec.role}</p>
-    </div>
+    </button>
   );
 }
