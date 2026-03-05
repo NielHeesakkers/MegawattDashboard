@@ -34,6 +34,45 @@ router.post(
   processPhoto,
   async (req: AuthRequest, res: Response) => {
     const { name, role, email, phone, photo, teamId, isVacancy, isTeamLead, order, subGroup } = req.body;
+    const isVac = isVacancy === 'true' || isVacancy === true;
+    const isLead = isTeamLead === 'true' || isTeamLead === true;
+
+    // Auto-calculate order: vacancies at bottom, team leads above vacancies
+    let finalOrder = Number(order) || 0;
+    if (!order || Number(order) === 0) {
+      const teamMembers = await prisma.member.findMany({
+        where: { teamId: Number(teamId) },
+        orderBy: { order: 'asc' },
+      });
+      if (isVac) {
+        // Vacancy: after everything
+        finalOrder = teamMembers.length > 0 ? Math.max(...teamMembers.map(m => m.order)) + 1 : 0;
+      } else if (isLead) {
+        // Team lead: always at the top
+        finalOrder = 0;
+        // Shift everyone down
+        await Promise.all(
+          teamMembers.map(m =>
+            prisma.member.update({ where: { id: m.id }, data: { order: m.order + 1 } })
+          )
+        );
+      } else {
+        // Regular member: at the bottom, but above vacancies
+        const firstVacancy = teamMembers.find(m => m.isVacancy);
+        if (firstVacancy) {
+          finalOrder = firstVacancy.order;
+          // Shift vacancies down
+          await Promise.all(
+            teamMembers.filter(m => m.isVacancy).map(m =>
+              prisma.member.update({ where: { id: m.id }, data: { order: m.order + 1 } })
+            )
+          );
+        } else {
+          finalOrder = teamMembers.length > 0 ? Math.max(...teamMembers.map(m => m.order)) + 1 : 0;
+        }
+      }
+    }
+
     const member = await prisma.member.create({
       data: {
         name,
@@ -42,9 +81,9 @@ router.post(
         phone: phone || null,
         photo: photo || null,
         teamId: Number(teamId),
-        isVacancy: isVacancy === 'true' || isVacancy === true,
-        isTeamLead: isTeamLead === 'true' || isTeamLead === true,
-        order: Number(order) || 0,
+        isVacancy: isVac,
+        isTeamLead: isLead,
+        order: finalOrder,
         subGroup: subGroup || null,
       },
       include: { team: true },

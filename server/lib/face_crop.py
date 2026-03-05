@@ -28,23 +28,51 @@ def main():
     tmp_out = tempfile.mkdtemp()
 
     try:
-        # Copy input to temp dir
         ext = os.path.splitext(input_path)[1] or '.jpg'
-        tmp_input = os.path.join(tmp_in, f"photo{ext}")
-        shutil.copy2(input_path, tmp_input)
 
-        cropper = Cropper(
-            face_factor=face_factor,
-            output_size=size,
-            strategy="largest",
-        )
-        cropper.process_dir(input_dir=tmp_in, output_dir=tmp_out)
+        def has_black_corners(img_path, threshold=10):
+            """Check if the image has black (unfilled) corners."""
+            img = Image.open(img_path)
+            pixels = img.load()
+            w, h = img.size
+            corners = [(0, 0), (w-1, 0), (0, h-1), (w-1, h-1)]
+            for x, y in corners:
+                p = pixels[x, y]
+                if isinstance(p, tuple):
+                    if all(c < threshold for c in p[:3]):
+                        return True
+                elif p < threshold:
+                    return True
+            return False
 
-        # Check if face-crop-plus produced output
-        results = [f for f in os.listdir(tmp_out) if not f.startswith('.')]
-        if results:
-            shutil.copy2(os.path.join(tmp_out, results[0]), output_path)
-            print("OK:face_detected")
+        def try_crop(ff):
+            """Run face_crop_plus with given face_factor, return output path or None."""
+            # Clean temp dirs
+            for f in os.listdir(tmp_in):
+                os.remove(os.path.join(tmp_in, f))
+            for f in os.listdir(tmp_out):
+                os.remove(os.path.join(tmp_out, f))
+            shutil.copy2(input_path, os.path.join(tmp_in, f"photo{ext}"))
+            cropper = Cropper(face_factor=ff, output_size=size, strategy="largest")
+            cropper.process_dir(input_dir=tmp_in, output_dir=tmp_out)
+            results = [f for f in os.listdir(tmp_out) if not f.startswith('.')]
+            if results:
+                return os.path.join(tmp_out, results[0])
+            return None
+
+        # Try with requested face_factor, increase if black corners appear
+        result_path = None
+        used_ff = face_factor
+        for ff in [face_factor, 0.5, 0.6, 0.7, 0.8]:
+            result_path = try_crop(ff)
+            if result_path and not has_black_corners(result_path):
+                used_ff = ff
+                break
+            used_ff = ff
+
+        if result_path:
+            shutil.copy2(result_path, output_path)
+            print(f"OK:face_detected:ff={used_ff}")
         else:
             # Fallback: center-top crop with PIL
             img = Image.open(input_path)
