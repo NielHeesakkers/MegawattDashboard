@@ -20,6 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import Modal from '../ui/Modal';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 interface MemberFormData {
   name: string;
@@ -36,7 +37,10 @@ const emptyForm: MemberFormData = {
   name: '', role: '', email: '', phone: '', teamId: '', isVacancy: false, isTeamLead: false, subGroup: '',
 };
 
-function SortableMemberRow({ member, onEdit, onDelete }: { member: Member; onEdit: (m: Member) => void; onDelete: (m: Member) => void }) {
+function SortableMemberRow({ member, onEdit, onDelete, selectMode, isSelected, onToggleSelect }: {
+  member: Member; onEdit: (m: Member) => void; onDelete: (m: Member) => void;
+  selectMode?: boolean; isSelected?: boolean; onToggleSelect?: (id: number) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: member.id });
 
   const style = {
@@ -45,10 +49,20 @@ function SortableMemberRow({ member, onEdit, onDelete }: { member: Member; onEdi
   };
 
   return (
-    <div ref={setNodeRef} style={style} onClick={() => onEdit(member)} className="flex items-center gap-3 bg-bg-card p-3 rounded-lg mb-2 hover:bg-white/5 cursor-pointer">
-      <button {...attributes} {...listeners} onClick={(e) => e.stopPropagation()} className="cursor-grab text-text-secondary hover:text-white">
-        ⠿
-      </button>
+    <div ref={setNodeRef} style={style} onClick={() => selectMode ? onToggleSelect?.(member.id) : onEdit(member)} className={`flex items-center gap-3 bg-bg-card p-3 rounded-lg mb-2 hover:bg-white/5 cursor-pointer ${isSelected ? 'ring-1 ring-accent-teal/50 bg-accent-teal/5' : ''}`}>
+      {selectMode ? (
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelect?.(member.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="w-4 h-4 rounded accent-accent-teal cursor-pointer"
+        />
+      ) : (
+        <button {...attributes} {...listeners} onClick={(e) => e.stopPropagation()} className="cursor-grab text-text-secondary hover:text-white">
+          ⠿
+        </button>
+      )}
       <div className="w-8 h-8 rounded-full overflow-hidden bg-bg-dark shrink-0">
         {member.photo ? (
           <img src={member.photo} alt="" className="w-full h-full object-cover" />
@@ -75,6 +89,7 @@ function SortableMemberRow({ member, onEdit, onDelete }: { member: Member; onEdi
 }
 
 export default function MemberManager() {
+  const toast = useToast();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [members, setMembers] = useState<Member[]>([]);
@@ -92,6 +107,12 @@ export default function MemberManager() {
   const [customSubGroup, setCustomSubGroup] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Bulk selection state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showBulkMove, setShowBulkMove] = useState(false);
+  const [bulkTargetTeam, setBulkTargetTeam] = useState('');
 
   // Team editing state
   const [editingTeam, setEditingTeam] = useState<Partial<Team> | null>(null);
@@ -179,13 +200,15 @@ export default function MemberManager() {
 
       if (editingId) {
         await updateMember(editingId, fd);
+        toast.success('Teamlid bijgewerkt');
       } else {
         await createMember(fd);
+        toast.success('Teamlid aangemaakt');
       }
       setShowForm(false);
       load();
-    } catch (err) {
-      console.error('Failed to save member:', err);
+    } catch {
+      toast.error('Teamlid opslaan mislukt');
     } finally {
       setSaving(false);
     }
@@ -193,7 +216,12 @@ export default function MemberManager() {
 
   const handleDelete = async () => {
     if (!deletingMember) return;
-    await deleteMember(deletingMember.id);
+    try {
+      await deleteMember(deletingMember.id);
+      toast.success(`"${deletingMember.name}" verwijderd`);
+    } catch {
+      toast.error('Teamlid verwijderen mislukt');
+    }
     setDeletingMember(null);
     load();
   };
@@ -204,10 +232,11 @@ export default function MemberManager() {
     setSavingTeam(true);
     try {
       await updateTeam(editingTeam.id!, editingTeam);
+      toast.success('Team bijgewerkt');
       setEditingTeam(null);
       load();
-    } catch (err) {
-      console.error('Failed to save team:', err);
+    } catch {
+      toast.error('Team opslaan mislukt');
     } finally {
       setSavingTeam(false);
     }
@@ -215,21 +244,95 @@ export default function MemberManager() {
 
   const handleTeamDelete = async () => {
     if (!deletingTeam) return;
-    await deleteTeam(deletingTeam.id);
+    try {
+      await deleteTeam(deletingTeam.id);
+      toast.success(`Team "${deletingTeam.name}" verwijderd`);
+    } catch {
+      toast.error('Team verwijderen mislukt');
+    }
     setDeletingTeam(null);
     setFilterTeam('all');
     navigate('/admin/members');
     load();
   };
 
-  const selectedTeam = filterTeam !== 'all' ? teams.find((t) => String(t.id) === filterTeam) : null;
+  // CSV Export
+  const handleCsvExport = () => {
+    const header = ['Naam', 'Functie', 'E-mail', 'Telefoon', 'Team', 'Subgroep', 'Vacature', 'Teamlead'];
+    const rows = members.map((m) => [
+      m.name,
+      m.role,
+      m.email || '',
+      m.phone || '',
+      m.team?.name || '',
+      m.subGroup || '',
+      m.isVacancy ? 'Ja' : 'Nee',
+      m.isTeamLead ? 'Ja' : 'Nee',
+    ]);
+    const csv = [header, ...rows].map((row) =>
+      row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'megawatt-medewerkers.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('CSV gedownload');
+  };
+
+  // Bulk move
+  const handleBulkMove = async () => {
+    if (!bulkTargetTeam || selectedIds.size === 0) return;
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) => {
+          const fd = new FormData();
+          const m = members.find((mem) => mem.id === id);
+          if (!m) return Promise.resolve();
+          fd.append('name', m.name);
+          fd.append('role', m.role);
+          fd.append('email', m.email || '');
+          fd.append('phone', m.phone || '');
+          fd.append('teamId', bulkTargetTeam);
+          fd.append('isVacancy', String(m.isVacancy));
+          fd.append('isTeamLead', String(m.isTeamLead));
+          fd.append('subGroup', m.subGroup || '');
+          return updateMember(id, fd);
+        })
+      );
+      toast.success(`${selectedIds.size} medewerker(s) verplaatst`);
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      setShowBulkMove(false);
+      setBulkTargetTeam('');
+      load();
+    } catch {
+      toast.error('Verplaatsen mislukt');
+    }
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectedTeam = filterTeam !== 'all' && filterTeam !== 'vacatures' ? teams.find((t) => String(t.id) === filterTeam) : null;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const teamFiltered = filterTeam === 'all' ? members : members.filter((m) => String(m.teamId) === filterTeam);
+  const teamFiltered = filterTeam === 'all'
+    ? members
+    : filterTeam === 'vacatures'
+      ? members.filter((m) => m.isVacancy)
+      : members.filter((m) => String(m.teamId) === filterTeam);
   const filtered = (searchQuery
     ? teamFiltered.filter((m) => {
         const q = searchQuery.toLowerCase();
@@ -260,10 +363,31 @@ export default function MemberManager() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-text-primary">Medewerkers</h1>
-        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2.5 rounded-[8px] bg-accent text-bg-dark font-semibold text-sm hover:brightness-110 transition-all duration-150 shadow-[0_2px_8px_rgba(201,168,76,0.3)] cursor-pointer">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-          Teamlid toevoegen
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCsvExport}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-[8px] bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.1)] text-text-primary text-sm hover:bg-[rgba(255,255,255,0.1)] transition-all duration-150 cursor-pointer"
+            title="CSV exporteren"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+            CSV
+          </button>
+          <button
+            onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-[8px] border text-sm transition-all duration-150 cursor-pointer ${
+              selectMode
+                ? 'bg-accent-teal/20 border-accent-teal/40 text-accent-teal'
+                : 'bg-[rgba(255,255,255,0.06)] border-[rgba(255,255,255,0.1)] text-text-primary hover:bg-[rgba(255,255,255,0.1)]'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Selecteer
+          </button>
+          <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2.5 rounded-[8px] bg-accent text-bg-dark font-semibold text-sm hover:brightness-110 transition-all duration-150 shadow-[0_2px_8px_rgba(201,168,76,0.3)] cursor-pointer">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+            Teamlid toevoegen
+          </button>
+        </div>
       </div>
 
       {/* Filter + Search */}
@@ -274,6 +398,7 @@ export default function MemberManager() {
           className="px-3 py-2 rounded-lg bg-bg-card border border-white/10 text-white text-sm"
         >
           <option value="all">Alle teams</option>
+          <option value="vacatures">Vacatures</option>
           {teams.map((t) => (
             <option key={t.id} value={String(t.id)}>{t.name}</option>
           ))}
@@ -317,8 +442,28 @@ export default function MemberManager() {
         </div>
       )}
 
+      {/* Bulk action bar */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="mb-4 flex items-center gap-3 bg-accent-teal/10 border border-accent-teal/20 rounded-[8px] px-4 py-3">
+          <span className="text-accent-teal text-sm font-medium">{selectedIds.size} geselecteerd</span>
+          <button
+            onClick={() => setShowBulkMove(true)}
+            className="ml-auto flex items-center gap-2 px-4 py-1.5 rounded-[6px] bg-accent-teal/20 text-accent-teal text-sm hover:bg-accent-teal/30 transition-colors cursor-pointer"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
+            Verplaats naar team...
+          </button>
+          <button
+            onClick={() => { setSelectedIds(new Set()); }}
+            className="text-text-secondary text-sm hover:text-white cursor-pointer"
+          >
+            Deselecteer
+          </button>
+        </div>
+      )}
+
       {/* Members list */}
-      <p className="text-text-secondary text-sm mb-4">Versleep om de volgorde aan te passen</p>
+      <p className="text-text-secondary text-sm mb-4">{selectMode ? 'Selecteer medewerkers om te verplaatsen' : 'Versleep om de volgorde aan te passen'}</p>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={filtered.map((m) => m.id)} strategy={verticalListSortingStrategy}>
@@ -328,6 +473,9 @@ export default function MemberManager() {
               member={member}
               onEdit={openEdit}
               onDelete={setDeletingMember}
+              selectMode={selectMode}
+              isSelected={selectedIds.has(member.id)}
+              onToggleSelect={toggleSelect}
             />
           ))}
         </SortableContext>
@@ -587,6 +735,45 @@ export default function MemberManager() {
         title="Team verwijderen"
         message={`Weet je zeker dat je "${deletingTeam?.name}" wilt verwijderen? Alle leden worden ook verwijderd.`}
       />
+
+      {/* Bulk move modal */}
+      <Modal
+        isOpen={showBulkMove}
+        onClose={() => { setShowBulkMove(false); setBulkTargetTeam(''); }}
+        title={`${selectedIds.size} medewerker(s) verplaatsen`}
+        maxWidth="max-w-sm"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-text-secondary text-sm mb-1">Verplaats naar team</label>
+            <select
+              value={bulkTargetTeam}
+              onChange={(e) => setBulkTargetTeam(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
+            >
+              <option value="">Selecteer team</option>
+              {teams.map((t) => (
+                <option key={t.id} value={String(t.id)}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => { setShowBulkMove(false); setBulkTargetTeam(''); }}
+              className="px-4 py-2 rounded-lg bg-white/10 text-text-primary hover:bg-white/20 transition-colors cursor-pointer"
+            >
+              Annuleren
+            </button>
+            <button
+              onClick={handleBulkMove}
+              disabled={!bulkTargetTeam}
+              className="px-5 py-2 rounded-lg bg-accent text-bg-dark font-semibold hover:brightness-110 transition-all shadow-[0_2px_8px_rgba(201,168,76,0.3)] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+            >
+              Verplaatsen
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

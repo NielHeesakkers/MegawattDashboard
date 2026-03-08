@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Modal from '../ui/Modal';
-import { shareViaEmail, Member, Executive } from '../../api';
+import { useToast } from '../ui/Toast';
+import { shareViaEmail } from '../../api';
 
 interface Contact {
   name: string;
@@ -18,10 +19,10 @@ interface EmailShareModalProps {
 }
 
 export default function EmailShareModal({ isOpen, onClose, generatePdfBase64, viewMode, contacts }: EmailShareModalProps) {
+  const toast = useToast();
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [sending, setSending] = useState(false);
-  const [status, setStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -75,12 +76,11 @@ export default function EmailShareModal({ isOpen, onClose, generatePdfBase64, vi
     if (!email) return;
 
     setSending(true);
-    setStatus(null);
 
     try {
       const pdfBase64 = await generatePdfBase64();
       if (!pdfBase64) {
-        setStatus({ type: 'error', text: 'PDF genereren mislukt' });
+        toast.error('PDF genereren mislukt');
         setSending(false);
         return;
       }
@@ -92,19 +92,18 @@ export default function EmailShareModal({ isOpen, onClose, generatePdfBase64, vi
         fileName,
       });
 
-      setStatus({ type: 'success', text: `E-mail verzonden naar ${email}` });
+      toast.success(`E-mail verzonden naar ${email}`);
       setEmail('');
       setSubject('');
     } catch (err: any) {
       const msg = err?.response?.data?.error || 'E-mail verzenden mislukt';
-      setStatus({ type: 'error', text: msg });
+      toast.error(msg);
     } finally {
       setSending(false);
     }
   };
 
   const handleClose = () => {
-    setStatus(null);
     setEmail('');
     setSubject('');
     setShowSuggestions(false);
@@ -114,16 +113,6 @@ export default function EmailShareModal({ isOpen, onClose, generatePdfBase64, vi
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Delen via e-mail" maxWidth="max-w-md">
       <form onSubmit={handleSubmit}>
-        {status && (
-          <div className={`mb-4 px-4 py-3 rounded-[8px] text-sm ${
-            status.type === 'success'
-              ? 'bg-green-500/10 border border-green-500/20 text-green-400'
-              : 'bg-red-500/10 border border-red-500/20 text-red-400'
-          }`}>
-            {status.text}
-          </div>
-        )}
-
         <div className="mb-4 relative">
           <label className="block text-text-secondary text-sm mb-1">Ontvanger *</label>
           <input

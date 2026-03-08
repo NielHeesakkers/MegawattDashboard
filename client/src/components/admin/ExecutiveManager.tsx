@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { fetchExecutives, createExecutive, updateExecutive, deleteExecutive, Executive } from '../../api';
 import Modal from '../ui/Modal';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 interface ExecFormData {
   name: string;
@@ -40,6 +41,7 @@ function ExecRow({ exec, onEdit, onDelete }: { exec: Executive; onEdit: (e: Exec
 }
 
 export default function ExecutiveManager() {
+  const toast = useToast();
   const [executives, setExecutives] = useState<Executive[]>([]);
   const [form, setForm] = useState<ExecFormData>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -97,13 +99,15 @@ export default function ExecutiveManager() {
 
       if (editingId) {
         await updateExecutive(editingId, fd);
+        toast.success('Directielid bijgewerkt');
       } else {
         await createExecutive(fd);
+        toast.success('Directielid aangemaakt');
       }
       setShowForm(false);
       load();
-    } catch (err) {
-      console.error('Failed to save executive:', err);
+    } catch {
+      toast.error('Directielid opslaan mislukt');
     } finally {
       setSaving(false);
     }
@@ -111,7 +115,12 @@ export default function ExecutiveManager() {
 
   const handleDelete = async () => {
     if (!deleting) return;
-    await deleteExecutive(deleting.id);
+    try {
+      await deleteExecutive(deleting.id);
+      toast.success(`Directielid "${deleting.name}" verwijderd`);
+    } catch {
+      toast.error('Directielid verwijderen mislukt');
+    }
     setDeleting(null);
     load();
   };

@@ -184,7 +184,7 @@ export const exportBackup = () =>
     const disposition = r.headers['content-disposition'];
     a.download = disposition
       ? disposition.split('filename=')[1]?.replace(/"/g, '') || 'megawatt-backup.zip'
-      : `megawatt-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+      : (() => { const d = new Date(); return `megawatt-backup-${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}.zip`; })();
     document.body.appendChild(a);
     a.click();
     window.URL.revokeObjectURL(url);
@@ -203,6 +203,34 @@ export const clearAllData = () =>
   api.delete<{ success: boolean; deleted: { members: number; teams: number; executives: number } }>(
     '/backup/clear'
   ).then((r) => r.data);
+
+// Backup list & download
+export interface BackupFile {
+  filename: string;
+  size: number;
+  createdAt: string;
+}
+
+export const fetchBackupList = () =>
+  api.get<{ backups: BackupFile[] }>('/backup/list').then((r) => r.data.backups);
+
+export const downloadBackup = (filename: string) =>
+  api.get(`/backup/download/${filename}`, { responseType: 'blob' }).then((r) => {
+    const url = window.URL.createObjectURL(r.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  });
+
+export const deleteBackup = (filename: string) =>
+  api.delete(`/backup/delete/${filename}`).then((r) => r.data);
+
+export const triggerAutoBackup = () =>
+  api.post<{ success: boolean; filename: string }>('/backup/auto').then((r) => r.data);
 
 // Email settings
 export interface EmailSettings {

@@ -13,8 +13,10 @@ services:
     volumes:
       - dashboard-data:/app/data
       - dashboard-uploads:/app/uploads
+      - dashboard-backups:/app/Backup
     restart: unless-stopped
 
 volumes:
   dashboard-data:
   dashboard-uploads:
+  dashboard-backups:

@@ -19,6 +19,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Modal from '../ui/Modal';
+import { useToast } from '../ui/Toast';
 
 function SortableTeamRow({ team, onEdit, onDelete }: { team: Team; onEdit: (t: Team) => void; onDelete: (t: Team) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: team.id });
@@ -50,6 +51,7 @@ function SortableTeamRow({ team, onEdit, onDelete }: { team: Team; onEdit: (t: T
 }
 
 export default function TeamManager() {
+  const toast = useToast();
   const [teams, setTeams] = useState<Team[]>([]);
   const [executives, setExecutives] = useState<Executive[]>([]);
   const [editingTeam, setEditingTeam] = useState<Partial<Team> | null>(null);
@@ -90,14 +92,16 @@ export default function TeamManager() {
     try {
       if (editingTeam.id) {
         await updateTeam(editingTeam.id, editingTeam);
+        toast.success('Team bijgewerkt');
       } else {
         await createTeam({ ...editingTeam, order: teams.length });
+        toast.success('Team aangemaakt');
       }
       setEditingTeam(null);
       setIsCreating(false);
       load();
-    } catch (err) {
-      console.error('Failed to save team:', err);
+    } catch {
+      toast.error('Team opslaan mislukt');
     } finally {
       setSaving(false);
     }
@@ -105,7 +109,12 @@ export default function TeamManager() {
 
   const handleDelete = async () => {
     if (!deletingTeam) return;
-    await deleteTeam(deletingTeam.id);
+    try {
+      await deleteTeam(deletingTeam.id);
+      toast.success(`Team "${deletingTeam.name}" verwijderd`);
+    } catch {
+      toast.error('Team verwijderen mislukt');
+    }
     setDeletingTeam(null);
     load();
   };

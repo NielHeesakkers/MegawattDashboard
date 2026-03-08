@@ -6,6 +6,16 @@ import { logAudit } from '../lib/audit';
 const router = Router();
 const prisma = new PrismaClient();
 
+// Admin: reorder members within client team — must be above /:id to avoid being caught by it
+router.put('/reorder/batch', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { orders } = req.body as { orders: { id: number; order: number }[] };
+  await Promise.all(
+    orders.map(({ id, order }) => prisma.clientTeamMember.update({ where: { id }, data: { order } }))
+  );
+  await logAudit('UPDATE', 'ClientTeamMember', 0, { action: 'reorder', orders }, req.adminUsername);
+  res.json({ success: true });
+});
+
 // Admin: assign member or executive to client team
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { clientTeamId, memberId, executiveId, role, order } = req.body;
@@ -36,16 +46,6 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   });
   await logAudit('UPDATE', 'ClientTeamMember', id, { role, order }, req.adminUsername);
   res.json(assignment);
-});
-
-// Admin: reorder members within client team
-router.put('/reorder/batch', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const { orders } = req.body as { orders: { id: number; order: number }[] };
-  await Promise.all(
-    orders.map(({ id, order }) => prisma.clientTeamMember.update({ where: { id }, data: { order } }))
-  );
-  await logAudit('UPDATE', 'ClientTeamMember', 0, { action: 'reorder', orders }, req.adminUsername);
-  res.json({ success: true });
 });
 
 // Admin: remove member from client team

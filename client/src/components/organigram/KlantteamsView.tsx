@@ -4,10 +4,11 @@ import { ExecutiveCard, matchesSearch } from './ExecutiveSection';
 import ClientTeamColumn from './ClientTeamColumn';
 import MemberModal from './MemberModal';
 import ExecutiveModal from './ExecutiveModal';
+import { KlantteamsSkeleton } from '../ui/Skeleton';
 
 interface KlantteamsViewProps {
   searchQuery: string;
-  captureRef: React.RefObject<HTMLDivElement | null>;
+  captureRef: React.RefObject<HTMLDivElement>;
 }
 
 export default function KlantteamsView({ searchQuery, captureRef }: KlantteamsViewProps) {
@@ -65,11 +66,7 @@ export default function KlantteamsView({ searchQuery, captureRef }: KlantteamsVi
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-pulse text-accent text-lg">Laden...</div>
-      </div>
-    );
+    return <KlantteamsSkeleton />;
   }
 
   if (clientTeams.length === 0) {

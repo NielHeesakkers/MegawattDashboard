@@ -7,6 +7,7 @@ import ExecutiveModal from './ExecutiveModal';
 import SearchBar from './SearchBar';
 import KlantteamsView from './KlantteamsView';
 import EmailShareModal from './EmailShareModal';
+import { OrganigramSkeleton } from '../ui/Skeleton';
 
 function MegawattLogo() {
   return (
@@ -220,8 +221,8 @@ export default function OrganigramPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-accent text-lg">Laden...</div>
+      <div className="min-h-screen">
+        <OrganigramSkeleton />
       </div>
     );
   }

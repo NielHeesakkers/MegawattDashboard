@@ -15,6 +15,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import Modal from '../ui/Modal';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 function SortableClientRow({ client, onEdit, onDelete }: { client: ClientType; onEdit: (c: ClientType) => void; onDelete: (c: ClientType) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: client.id });
@@ -55,6 +56,7 @@ function SortableTeamRow({ team, isSelected, onClick }: { team: ClientTeam; isSe
 }
 
 export default function ClientTeamManager() {
+  const toast = useToast();
   const [clientTeams, setClientTeams] = useState<ClientTeam[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [executives, setExecutives] = useState<Executive[]>([]);
@@ -120,17 +122,26 @@ export default function ClientTeamManager() {
     try {
       if (editingTeam.id) {
         await updateClientTeam(editingTeam.id, editingTeam);
+        toast.success('Klantteam bijgewerkt');
       } else {
         const newTeam = await createClientTeam({ ...editingTeam, order: clientTeams.length });
         setSelectedTeamId(newTeam.id);
+        toast.success('Klantteam aangemaakt');
       }
       setShowTeamForm(false);
       load();
+    } catch {
+      toast.error('Klantteam opslaan mislukt');
     } finally { setSaving(false); }
   };
   const handleTeamDelete = async () => {
     if (!deletingTeam) return;
-    await deleteClientTeam(deletingTeam.id);
+    try {
+      await deleteClientTeam(deletingTeam.id);
+      toast.success(`Klantteam "${deletingTeam.name}" verwijderd`);
+    } catch {
+      toast.error('Klantteam verwijderen mislukt');
+    }
     if (selectedTeamId === deletingTeam.id) setSelectedTeamId(null);
     setDeletingTeam(null);
     load();
@@ -148,17 +159,17 @@ export default function ClientTeamManager() {
         role: memberForm.role,
         order,
       });
+      toast.success('Teamlid toegewezen');
       setShowMemberForm(false);
       setMemberForm({ personId: '', personType: '', role: 'PM' });
       setMemberSearch('');
       load();
     } catch (err: any) {
-      if (err.response?.status === 409) {
-        alert(err.response.data.error);
-      }
+      const msg = err?.response?.data?.error || 'Toewijzen mislukt';
+      toast.error(msg);
     } finally { setSaving(false); }
   };
-  const openEditMember = (ctm: ClientTeamMember) => {
+  const openEditMember = (ctm: ClientTeamMemberWithMember) => {
     setEditingMember(ctm);
     setEditMemberRole(ctm.role);
   };
@@ -167,13 +178,21 @@ export default function ClientTeamManager() {
     setSaving(true);
     try {
       await updateClientTeamMember(editingMember.id, { role: editMemberRole });
+      toast.success('Rol bijgewerkt');
       setEditingMember(null);
       load();
+    } catch {
+      toast.error('Rol bijwerken mislukt');
     } finally { setSaving(false); }
   };
   const handleRemoveAssignment = async () => {
     if (!deletingAssignment) return;
-    await deleteClientTeamMember(deletingAssignment);
+    try {
+      await deleteClientTeamMember(deletingAssignment);
+      toast.success('Teamlid verwijderd uit klantteam');
+    } catch {
+      toast.error('Verwijderen mislukt');
+    }
     setDeletingAssignment(null);
     load();
   };
@@ -193,16 +212,25 @@ export default function ClientTeamManager() {
     try {
       if (clientForm.id) {
         await updateClient(clientForm.id, { name: clientForm.name, url: clientForm.url || null });
+        toast.success('Klant bijgewerkt');
       } else {
         await createClient({ name: clientForm.name, url: clientForm.url || null, clientTeamId: selectedTeamId, order: selectedTeam?.clients.length || 0 });
+        toast.success('Klant aangemaakt');
       }
       setShowClientForm(false);
       load();
+    } catch {
+      toast.error('Klant opslaan mislukt');
     } finally { setSaving(false); }
   };
   const handleClientDelete = async () => {
     if (!deletingClient) return;
-    await deleteClient(deletingClient.id);
+    try {
+      await deleteClient(deletingClient.id);
+      toast.success(`Klant "${deletingClient.name}" verwijderd`);
+    } catch {
+      toast.error('Klant verwijderen mislukt');
+    }
     setDeletingClient(null);
     load();
   };

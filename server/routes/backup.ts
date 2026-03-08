@@ -17,6 +17,12 @@ const PROJECT_ROOT = __dirname.includes(path.join('dist', 'server'))
   : path.resolve(__dirname, '../..');
 
 const uploadsDir = path.resolve(PROJECT_ROOT, 'uploads');
+const backupDir = path.resolve(PROJECT_ROOT, 'Backup');
+
+// Ensure Backup directory exists
+if (!fs.existsSync(backupDir)) {
+  fs.mkdirSync(backupDir, { recursive: true });
+}
 
 const importUpload = multer({
   storage: multer.memoryStorage(),
@@ -70,7 +76,11 @@ router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) =>
     });
 
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="megawatt-backup-${new Date().toISOString().slice(0, 10)}.zip"`);
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    res.setHeader('Content-Disposition', `attachment; filename="megawatt-backup-${dd}-${mm}-${yyyy}.zip"`);
 
     archive.pipe(res);
     archive.append(JSON.stringify(backupData, null, 2), { name: 'data.json' });
@@ -171,12 +181,14 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
         // Insert client team members with remapped IDs
         if (backupData.clientTeamMembers) {
           for (const ctm of backupData.clientTeamMembers) {
-            const { id: _oldId, member: _m, ...data } = ctm;
+            const { id: _oldId, member: _m, executive: _e, ...data } = ctm;
             const newCtId = ctIdMap.get(data.clientTeamId);
-            const newMemberId = memberIdMap.get(data.memberId);
-            if (!newCtId || !newMemberId) continue;
+            if (!newCtId) continue;
+            const newMemberId = data.memberId ? memberIdMap.get(data.memberId) ?? null : null;
+            const newExecId = data.executiveId ? execIdMap.get(data.executiveId) ?? null : null;
+            if (!newMemberId && !newExecId) continue;
             await tx.clientTeamMember.create({
-              data: { ...data, clientTeamId: newCtId, memberId: newMemberId },
+              data: { ...data, clientTeamId: newCtId, memberId: newMemberId, executiveId: newExecId },
             });
           }
         }
@@ -271,6 +283,137 @@ router.delete('/clear', authMiddleware, async (req: AuthRequest, res: Response) 
   } catch (err) {
     console.error('Clear failed:', err);
     res.status(500).json({ error: 'Clear failed' });
+  }
+});
+
+// ---- Auto backup ----
+
+async function createAutoBackup(): Promise<string | null> {
+  try {
+    const [executives, teams, members, clientTeams, clientTeamMembers, clients] = await Promise.all([
+      prisma.executive.findMany({ orderBy: { level: 'asc' } }),
+      prisma.team.findMany({ orderBy: { order: 'asc' } }),
+      prisma.member.findMany({ orderBy: [{ teamId: 'asc' }, { order: 'asc' }] }),
+      prisma.clientTeam.findMany({ orderBy: { order: 'asc' } }),
+      prisma.clientTeamMember.findMany({ orderBy: { order: 'asc' } }),
+      prisma.client.findMany({ orderBy: [{ clientTeamId: 'asc' }, { order: 'asc' }] }),
+    ]);
+
+    const backupData: BackupData = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      executives,
+      teams,
+      members,
+      clientTeams,
+      clientTeamMembers,
+      clients,
+    };
+
+    const date = new Date();
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    const hhmm = date.toTimeString().slice(0, 5).replace(':', '');
+    const filename = `megawatt-backup-${dd}-${mm}-${yyyy}_${hhmm}.zip`;
+    const outputPath = path.join(backupDir, filename);
+
+    await new Promise<void>((resolve, reject) => {
+      const output = fs.createWriteStream(outputPath);
+      const archive = archiver('zip', { zlib: { level: 9 } });
+      output.on('close', resolve);
+      archive.on('error', reject);
+      archive.pipe(output);
+      archive.append(JSON.stringify(backupData, null, 2), { name: 'data.json' });
+      if (fs.existsSync(uploadsDir)) {
+        archive.directory(uploadsDir, 'uploads');
+      }
+      archive.finalize();
+    });
+
+    // Keep max 30 backups, delete oldest
+    const files = fs.readdirSync(backupDir)
+      .filter((f) => f.startsWith('megawatt-backup-') && f.endsWith('.zip'))
+      .sort()
+      .reverse();
+    for (const old of files.slice(30)) {
+      fs.unlinkSync(path.join(backupDir, old));
+    }
+
+    console.log(`[Auto Backup] Created: ${filename}`);
+    return filename;
+  } catch (err) {
+    console.error('[Auto Backup] Failed:', err);
+    return null;
+  }
+}
+
+// Schedule daily auto backup (every 24 hours, first run 1 minute after start)
+setTimeout(() => {
+  createAutoBackup();
+  setInterval(createAutoBackup, 24 * 60 * 60 * 1000);
+}, 60 * 1000);
+
+// GET /api/backup/list — list local backups
+router.get('/list', authMiddleware, async (_req, res: Response) => {
+  try {
+    const files = fs.readdirSync(backupDir)
+      .filter((f) => f.startsWith('megawatt-backup-') && f.endsWith('.zip'))
+      .map((filename) => {
+        const stat = fs.statSync(path.join(backupDir, filename));
+        return { filename, size: stat.size, createdAt: stat.mtime.toISOString() };
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    res.json({ backups: files });
+  } catch {
+    res.json({ backups: [] });
+  }
+});
+
+// GET /api/backup/download/:filename — download a specific backup
+router.get('/download/:filename', authMiddleware, (req, res: Response) => {
+  const filename = req.params.filename as string;
+  // Sanitize filename
+  if (!filename.startsWith('megawatt-backup-') || !filename.endsWith('.zip') || filename.includes('..')) {
+    res.status(400).json({ error: 'Invalid filename' });
+    return;
+  }
+  const filePath = path.join(backupDir, filename);
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: 'Backup not found' });
+    return;
+  }
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  fs.createReadStream(filePath).pipe(res);
+});
+
+// DELETE /api/backup/delete/:filename — delete a specific backup
+router.delete('/delete/:filename', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const filename = req.params.filename as string;
+  if (!filename.startsWith('megawatt-backup-') || !filename.endsWith('.zip') || filename.includes('..')) {
+    res.status(400).json({ error: 'Invalid filename' });
+    return;
+  }
+  const filePath = path.join(backupDir, filename);
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: 'Backup not found' });
+    return;
+  }
+  fs.unlinkSync(filePath);
+  await logAudit('DELETE', 'Backup', 0, { action: 'delete-backup', filename }, req.adminUsername);
+  res.json({ success: true });
+});
+
+// POST /api/backup/auto — trigger manual auto backup
+router.post('/auto', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const filename = await createAutoBackup();
+  if (filename) {
+    await logAudit('CREATE', 'Backup', 0, { action: 'auto-backup', filename }, req.adminUsername);
+    res.json({ success: true, filename });
+  } else {
+    res.status(500).json({ error: 'Backup failed' });
   }
 });
 
