@@ -114,6 +114,67 @@ export const fetchAuditLogs = (page = 1, limit = 50) =>
     `/audit-logs?page=${page}&limit=${limit}`
   ).then((r) => r.data);
 
+export const fetchChangelog = () =>
+  api.get<{ content: string }>('/audit-logs/changelog').then((r) => r.data.content);
+
+// Client Teams types
+export interface ClientTeam {
+  id: number;
+  name: string;
+  order: number;
+  executiveId: number | null;
+  executive?: Executive | null;
+  members: ClientTeamMemberWithMember[];
+  clients: Client[];
+}
+
+export interface ClientTeamMember {
+  id: number;
+  clientTeamId: number;
+  memberId: number | null;
+  executiveId: number | null;
+  role: string;
+  order: number;
+}
+
+export interface ClientTeamMemberWithMember extends ClientTeamMember {
+  member: Member | null;
+  executive: Executive | null;
+}
+
+export interface Client {
+  id: number;
+  name: string;
+  url: string | null;
+  clientTeamId: number;
+  order: number;
+}
+
+// Client Teams API
+export const fetchClientTeams = () => api.get<ClientTeam[]>('/client-teams').then((r) => r.data);
+export const createClientTeam = (data: Partial<ClientTeam>) => api.post<ClientTeam>('/client-teams', data).then((r) => r.data);
+export const updateClientTeam = (id: number, data: Partial<ClientTeam>) => api.put<ClientTeam>(`/client-teams/${id}`, data).then((r) => r.data);
+export const deleteClientTeam = (id: number) => api.delete(`/client-teams/${id}`);
+export const reorderClientTeams = (orders: { id: number; order: number }[]) =>
+  api.put('/client-teams/reorder/batch', { orders });
+
+// Client Team Members API
+export const createClientTeamMember = (data: { clientTeamId: number; memberId?: number; executiveId?: number; role: string; order?: number }) =>
+  api.post<ClientTeamMemberWithMember>('/client-team-members', data).then((r) => r.data);
+export const updateClientTeamMember = (id: number, data: { role?: string; order?: number }) =>
+  api.put<ClientTeamMemberWithMember>(`/client-team-members/${id}`, data).then((r) => r.data);
+export const deleteClientTeamMember = (id: number) => api.delete(`/client-team-members/${id}`);
+export const reorderClientTeamMembers = (orders: { id: number; order: number }[]) =>
+  api.put('/client-team-members/reorder/batch', { orders });
+
+// Clients (companies) API
+export const fetchClients = () => api.get<Client[]>('/clients').then((r) => r.data);
+export const createClient = (data: Partial<Client>) => api.post<Client>('/clients', data).then((r) => r.data);
+export const updateClient = (id: number, data: Partial<Client>) => api.put<Client>(`/clients/${id}`, data).then((r) => r.data);
+export const deleteClient = (id: number) => api.delete(`/clients/${id}`);
+export const reorderClients = (orders: { id: number; order: number }[]) =>
+  api.put('/clients/reorder/batch', { orders });
+
 // Backup operations
 export const exportBackup = () =>
   api.get('/backup/export', { responseType: 'blob' }).then((r) => {
@@ -142,5 +203,30 @@ export const clearAllData = () =>
   api.delete<{ success: boolean; deleted: { members: number; teams: number; executives: number } }>(
     '/backup/clear'
   ).then((r) => r.data);
+
+// Email settings
+export interface EmailSettings {
+  configured: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  smtpUser: string;
+  smtpPass: string;
+  fromEmail: string;
+  fromName: string;
+}
+
+export const fetchEmailSettings = () =>
+  api.get<EmailSettings>('/settings/email').then((r) => r.data);
+
+export const updateEmailSettings = (data: {
+  smtpHost: string; smtpPort: number; smtpUser: string; smtpPass: string;
+  fromEmail: string; fromName: string;
+}) => api.put<{ success: boolean }>('/settings/email', data).then((r) => r.data);
+
+export const sendTestEmail = (testEmail: string) =>
+  api.post<{ success: boolean }>('/settings/email/test', { testEmail }).then((r) => r.data);
+
+export const shareViaEmail = (data: { to: string; subject?: string; pdfBase64: string; fileName?: string }) =>
+  api.post<{ success: boolean }>('/share-email', data).then((r) => r.data);
 
 export default api;

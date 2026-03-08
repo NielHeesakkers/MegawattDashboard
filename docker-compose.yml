@@ -1,20 +1,20 @@
 services:
-  organigram:
+  dashboard:
     build:
-      context: https://github.com/NielHeesakkers/megawatt-organigram.git#main
-    container_name: megawatt-organigram
+      context: https://github.com/NielHeesakkers/MegawattDashboard.git#main
+    container_name: megawatt-dashboard
     ports:
       - "3001:3001"
     environment:
       - NODE_ENV=production
       - PORT=3001
       - DATABASE_URL=file:/app/data/dev.db
-      - JWT_SECRET=${JWT_SECRET:-megawatt-organigram-secret-2026}
+      - JWT_SECRET=${JWT_SECRET:-megawatt-dashboard-secret-2026}
     volumes:
-      - organigram-data:/app/data
-      - organigram-uploads:/app/uploads
+      - dashboard-data:/app/data
+      - dashboard-uploads:/app/uploads
     restart: unless-stopped
 
 volumes:
-  organigram-data:
-  organigram-uploads:
+  dashboard-data:
+  dashboard-uploads:

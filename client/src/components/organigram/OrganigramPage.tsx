@@ -5,6 +5,8 @@ import TeamColumn from './TeamColumn';
 import MemberModal from './MemberModal';
 import ExecutiveModal from './ExecutiveModal';
 import SearchBar from './SearchBar';
+import KlantteamsView from './KlantteamsView';
+import EmailShareModal from './EmailShareModal';
 
 function MegawattLogo() {
   return (
@@ -14,11 +16,21 @@ function MegawattLogo() {
   );
 }
 
+type ViewMode = 'dashboard' | 'klantteams';
+
 type OrgBranch =
   | { kind: 'team'; team: Team }
   | { kind: 'director'; director: Executive; childTeams: Team[] };
 
 export default function OrganigramPage() {
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem('megawatt-view-mode');
+    return saved === 'klantteams' ? 'klantteams' : 'dashboard';
+  });
+  const handleViewMode = (mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem('megawatt-view-mode', mode);
+  };
   const [teams, setTeams] = useState<Team[]>([]);
   const [executives, setExecutives] = useState<Executive[]>([]);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
@@ -26,6 +38,7 @@ export default function OrganigramPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const captureRef = useRef<HTMLDivElement>(null);
+  const klantteamsCaptureRef = useRef<HTMLDivElement>(null);
   const branchContainerRef = useRef<HTMLDivElement>(null);
   const richardCardRef = useRef<HTMLDivElement>(null);
   const rachelleCardRef = useRef<HTMLDivElement>(null);
@@ -56,16 +69,28 @@ export default function OrganigramPage() {
     return () => window.removeEventListener('resize', measure);
   }, [teams, executives]);
 
-  const handleExportPdf = async () => {
-    if (!captureRef.current) return;
-    const { toJpeg } = await import('html-to-image');
-    const { jsPDF } = await import('jspdf');
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
 
-    const el = captureRef.current;
+  // Close export menu on outside click
+  useEffect(() => {
+    if (!exportOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [exportOpen]);
+
+  const captureImage = async () => {
+    const activeRef = viewMode === 'klantteams' ? klantteamsCaptureRef : captureRef;
+    if (!activeRef.current) return null;
+    const { toJpeg } = await import('html-to-image');
+
+    const el = activeRef.current;
     const fullW = el.scrollWidth;
     const fullH = el.scrollHeight;
 
-    // Temporarily expand the container so the full organigram is visible
     const origStyles = {
       overflow: el.style.overflow,
       width: el.style.width,
@@ -75,11 +100,8 @@ export default function OrganigramPage() {
     el.style.width = `${fullW}px`;
     el.style.background = 'linear-gradient(135deg, #0f1f1d 0%, #1a3a38 50%, #1f4340 100%)';
 
-    // Wait for repaint
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-    // html-to-image clones the DOM, inlines ALL computed styles,
-    // embeds images as data URIs, and renders via the browser's own engine
     const dataUrl = await toJpeg(el, {
       width: fullW,
       height: fullH,
@@ -88,23 +110,57 @@ export default function OrganigramPage() {
       pixelRatio: 2,
     });
 
-    // Restore original styles
     el.style.overflow = origStyles.overflow;
     el.style.width = origStyles.width;
     el.style.background = origStyles.background;
 
-    // Build PDF from the image
+    return dataUrl;
+  };
+
+  const handleExportPdf = async () => {
+    setExportOpen(false);
+    const dataUrl = await captureImage();
+    if (!dataUrl) return;
+    const { jsPDF } = await import('jspdf');
     const img = new Image();
     img.src = dataUrl;
     await new Promise((r) => { img.onload = r; });
-
     const pdf = new jsPDF({
       orientation: 'landscape',
       unit: 'px',
       format: [img.width / 2, img.height / 2],
     });
     pdf.addImage(dataUrl, 'JPEG', 0, 0, img.width / 2, img.height / 2);
-    pdf.save('MEGAWATT-Organigram.pdf');
+    pdf.save(viewMode === 'klantteams' ? 'MEGAWATT-Klantteams.pdf' : 'MEGAWATT-Dashboard.pdf');
+  };
+
+  const handleExportJpg = async () => {
+    setExportOpen(false);
+    const dataUrl = await captureImage();
+    if (!dataUrl) return;
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = viewMode === 'klantteams' ? 'MEGAWATT-Klantteams.jpg' : 'MEGAWATT-Dashboard.jpg';
+    a.click();
+  };
+
+  const [emailShareOpen, setEmailShareOpen] = useState(false);
+
+  const generatePdfBase64 = async (): Promise<string | null> => {
+    const dataUrl = await captureImage();
+    if (!dataUrl) return null;
+    const { jsPDF } = await import('jspdf');
+    const img = new Image();
+    img.src = dataUrl;
+    await new Promise((r) => { img.onload = r; });
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'px',
+      format: [img.width / 2, img.height / 2],
+    });
+    pdf.addImage(dataUrl, 'JPEG', 0, 0, img.width / 2, img.height / 2);
+    const pdfDataUri = pdf.output('datauristring');
+    return pdfDataUri.split(',')[1];
   };
 
   const ceo = executives.find((e) => e.level === 0);
@@ -121,6 +177,8 @@ export default function OrganigramPage() {
   // First pass: group teams by their director (level 1+) executiveId
   for (const team of teams) {
     if (team.members.length === 0) continue;
+    // Skip Directie team — executives are already shown as cards above
+    if (team.name === 'Directie') continue;
     if (team.executiveId && team.executiveId !== ceoId) {
       const existing = directorGroupMap.get(team.executiveId);
       if (existing) {
@@ -138,6 +196,7 @@ export default function OrganigramPage() {
   const usedDirectors = new Set<number>();
   for (const team of teams) {
     if (team.members.length === 0) continue;
+    if (team.name === 'Directie') continue;
     const isDirectorTeam = team.executiveId && team.executiveId !== ceoId;
     if (isDirectorTeam) {
       if (!usedDirectors.has(team.executiveId!)) {
@@ -172,14 +231,90 @@ export default function OrganigramPage() {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-[rgba(15,31,29,0.9)] backdrop-blur-md border-b border-[rgba(255,255,255,0.08)]">
         <div className="mx-auto px-6 py-3 flex flex-col sm:flex-row items-center gap-4">
-          <div className="flex-shrink-0">
-            <MegawattLogo />
-          </div>
-          <SearchBar value={searchQuery} onChange={setSearchQuery} />
           <div className="flex-shrink-0 flex items-center gap-2">
+            <MegawattLogo />
+            <span className="text-[rgba(255,255,255,0.5)] text-[12px] font-medium">Dashboard</span>
+          </div>
+          <div className="flex-shrink-0 flex items-center gap-2 ml-auto">
+            {/* View toggle */}
+            <div className="flex h-7 rounded-lg overflow-hidden ring-1 ring-[rgba(255,255,255,0.15)]">
+              <button
+                onClick={() => handleViewMode('dashboard')}
+                className={`px-3 py-[5px] text-[12px] font-medium transition-all duration-150 cursor-pointer ${
+                  viewMode === 'dashboard'
+                    ? 'bg-accent text-bg-dark'
+                    : 'bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white'
+                }`}
+              >
+                Organigram
+              </button>
+              <button
+                onClick={() => handleViewMode('klantteams')}
+                className={`px-3 py-[5px] text-[12px] font-medium transition-all duration-150 cursor-pointer ${
+                  viewMode === 'klantteams'
+                    ? 'bg-accent text-bg-dark'
+                    : 'bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white'
+                }`}
+              >
+                Klantteams
+              </button>
+            </div>
+            <SearchBar value={searchQuery} onChange={setSearchQuery} />
+            <div ref={exportRef} className="relative">
+              <button
+                onClick={() => setExportOpen(!exportOpen)}
+                className={`h-7 w-7 flex items-center justify-center rounded-lg ring-1 ring-[rgba(255,255,255,0.15)] transition-all duration-150 cursor-pointer ${
+                  exportOpen
+                    ? 'bg-[rgba(255,255,255,0.12)] text-white'
+                    : 'bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white'
+                }`}
+                title="Exporteren"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15m0-3-3-3m0 0-3 3m3-3V15" />
+                </svg>
+              </button>
+              {exportOpen && (
+                <div className="absolute top-full right-0 mt-[10px] z-50 w-44 bg-bg-surface rounded-xl ring-1 ring-[rgba(255,255,255,0.12)] shadow-2xl overflow-hidden animate-[slideDown_100ms_ease-out]">
+                  <button
+                    onClick={handleExportPdf}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-[13px] text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-colors cursor-pointer"
+                  >
+                    <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                    </svg>
+                    Export als PDF
+                  </button>
+                  <div className="border-t border-[rgba(255,255,255,0.06)]" />
+                  <button
+                    onClick={handleExportJpg}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-[13px] text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-colors cursor-pointer"
+                  >
+                    <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" />
+                    </svg>
+                    Export als JPG
+                  </button>
+                  {localStorage.getItem('token') && (
+                    <>
+                      <div className="border-t border-[rgba(255,255,255,0.06)]" />
+                      <button
+                        onClick={() => { setExportOpen(false); setEmailShareOpen(true); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-[13px] text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-colors cursor-pointer"
+                      >
+                        <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+                        </svg>
+                        Delen via e-mail
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
             <a
               href="/admin"
-              className="p-[6px] rounded-[6px] bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.15)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.15)] hover:text-white transition-all duration-150"
+              className="h-7 w-7 flex items-center justify-center rounded-lg bg-[rgba(255,255,255,0.06)] ring-1 ring-[rgba(255,255,255,0.15)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white transition-all duration-150"
               title="Beheer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -187,128 +322,144 @@ export default function OrganigramPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
               </svg>
             </a>
-            <button
-              onClick={handleExportPdf}
-              className="px-4 py-[6px] rounded-[6px] bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.15)] text-[rgba(255,255,255,0.7)] text-[13px] hover:bg-[rgba(255,255,255,0.15)] hover:text-white transition-all duration-150 cursor-pointer"
-            >
-              Export PDF
-            </button>
           </div>
         </div>
       </header>
 
-      {/* Organigram — parent-child flex structure, lines always connected */}
-      <div ref={captureRef} id="organigram-capture" className="mx-auto px-6 py-8 overflow-x-auto">
-        {/* CEO */}
-        <div className="flex flex-col items-center">
-          {ceo && (
-            <ExecutiveCard
-              exec={ceo}
-              isHighlighted={hasSearch && matchesSearch(ceo, searchQuery)}
-              isDimmed={hasSearch && !matchesSearch(ceo, searchQuery)}
-              onClick={setSelectedExec}
-              hasAccent={0.10}
-            />
-          )}
-          <div className="w-0.5 h-8 bg-accent" />
-        </div>
-
-        {/* CEO's children — each branch sized proportional to its team count */}
-        <div ref={branchContainerRef} className="flex relative" style={{ minWidth: `${branches.reduce((s, b) => s + (b.kind === 'team' ? 1 : b.childTeams.length), 0) * 140}px` }}>
-          {/* Richard ↔ Rachelle connecting line (dynamically positioned) */}
-          {connLine && (
-            <div className="absolute h-0.5 bg-accent z-10" style={{ left: connLine.left, width: connLine.width, top: connLine.top }} />
-          )}
-          {branches.map((branch, i) => {
-            const teamCount = branch.kind === 'team' ? 1 : branch.childTeams.length;
-            const teamsList = branch.kind === 'team' ? [branch.team] : branch.childTeams;
-
-            return (
-              <div
-                key={i}
-                style={{ flex: teamCount }}
-                className="flex flex-col items-center relative"
-              >
-                {/* Horizontal bar — absolute, first/last child starts/ends at 50% */}
-                <div
-                  className="absolute top-0 h-0.5 bg-accent"
-                  style={{
-                    left: i === 0 ? '50%' : 0,
-                    right: i === branches.length - 1 ? '50%' : 0,
-                  }}
+      {/* View content */}
+      {viewMode === 'klantteams' ? (
+        <KlantteamsView searchQuery={searchQuery} captureRef={klantteamsCaptureRef} />
+      ) : (
+        <>
+          {/* Organigram — parent-child flex structure, lines always connected */}
+          <div ref={captureRef} id="organigram-capture" className="mx-auto px-6 py-8 overflow-x-auto">
+            {/* CEO */}
+            <div className="flex flex-col items-center">
+              {ceo && (
+                <ExecutiveCard
+                  exec={ceo}
+                  isHighlighted={hasSearch && matchesSearch(ceo, searchQuery)}
+                  isDimmed={hasSearch && !matchesSearch(ceo, searchQuery)}
+                  onClick={setSelectedExec}
+                  hasAccent={0.10}
                 />
-                {/* Vertical connector from bar to director zone */}
-                <div className="w-0.5 h-6 bg-accent" />
+              )}
+              <div className="w-0.5 h-8 bg-accent" />
+            </div>
 
-                {/* Director zone — consistent height so all team columns align */}
-                <div className="flex flex-col items-center relative" style={{ height: 170 }}>
-                  {branch.kind === 'director' ? (
-                    <>
-                      <div ref={i === richardBranchIdx ? richardCardRef : i === rachelleBranchIdx ? rachelleCardRef : undefined}>
-                        <ExecutiveCard
-                          exec={branch.director}
-                          isHighlighted={hasSearch && matchesSearch(branch.director, searchQuery)}
-                          isDimmed={hasSearch && !matchesSearch(branch.director, searchQuery)}
-                          onClick={setSelectedExec}
-                          hasAccent={0.09}
-                        />
-                      </div>
-                      <div className="w-0.5 flex-1 bg-accent" />
-                    </>
-                  ) : (
-                    <div className="w-0.5 h-full bg-accent" />
-                  )}
-                </div>
+            {/* CEO's children — each branch sized proportional to its team count */}
+            <div ref={branchContainerRef} className="flex relative" style={{ minWidth: `${branches.reduce((s, b) => s + (b.kind === 'team' ? 1 : b.childTeams.length), 0) * 140}px` }}>
+              {/* Richard ↔ Rachelle connecting line (dynamically positioned) */}
+              {connLine && (
+                <div className="absolute h-0.5 bg-accent z-10" style={{ left: connLine.left, width: connLine.width, top: connLine.top }} />
+              )}
+              {branches.map((branch, i) => {
+                const teamCount = branch.kind === 'team' ? 1 : branch.childTeams.length;
+                const teamsList = branch.kind === 'team' ? [branch.team] : branch.childTeams;
 
-                {/* Connector below director zone */}
-                <div className="w-0.5 h-6 bg-accent" />
+                return (
+                  <div
+                    key={i}
+                    style={{ flex: teamCount }}
+                    className="flex flex-col items-center relative"
+                  >
+                    {/* Horizontal bar — absolute, first/last child starts/ends at 50% */}
+                    <div
+                      className="absolute top-0 h-0.5 bg-accent"
+                      style={{
+                        left: i === 0 ? '50%' : 0,
+                        right: i === branches.length - 1 ? '50%' : 0,
+                      }}
+                    />
+                    {/* Vertical connector from bar to director zone */}
+                    <div className="w-0.5 h-6 bg-accent" />
 
-                {/* Team columns — all start at the same vertical position */}
-                {teamsList.length === 1 ? (
-                  <>
-                    <div className="w-0.5 h-5 bg-accent" />
-                    <div className="w-full px-1.5">
-                      <TeamColumn
-                        team={teamsList[0]}
-                        onMemberClick={(m) => memberClick(m, teamsList[0])}
-                        searchQuery={searchQuery}
-                      />
+                    {/* Director zone — consistent height so all team columns align */}
+                    <div className="flex flex-col items-center relative" style={{ height: 170 }}>
+                      {branch.kind === 'director' ? (
+                        <>
+                          <div ref={i === richardBranchIdx ? richardCardRef : i === rachelleBranchIdx ? rachelleCardRef : undefined}>
+                            <ExecutiveCard
+                              exec={branch.director}
+                              isHighlighted={hasSearch && matchesSearch(branch.director, searchQuery)}
+                              isDimmed={hasSearch && !matchesSearch(branch.director, searchQuery)}
+                              onClick={setSelectedExec}
+                              hasAccent={0.09}
+                            />
+                          </div>
+                          <div className="w-0.5 flex-1 bg-accent" />
+                        </>
+                      ) : (
+                        <div className="w-0.5 h-full bg-accent" />
+                      )}
                     </div>
-                  </>
-                ) : (
-                  <div className="flex w-full">
-                    {teamsList.map((team, j) => (
-                      <div
-                        key={team.id}
-                        className="flex-1 flex flex-col items-center relative"
-                      >
-                        <div
-                          className="absolute top-0 h-0.5 bg-accent"
-                          style={{
-                            left: j === 0 ? '50%' : 0,
-                            right: j === teamsList.length - 1 ? '50%' : 0,
-                          }}
-                        />
+
+                    {/* Connector below director zone */}
+                    <div className="w-0.5 h-6 bg-accent" />
+
+                    {/* Team columns — all start at the same vertical position */}
+                    {teamsList.length === 1 ? (
+                      <>
                         <div className="w-0.5 h-5 bg-accent" />
                         <div className="w-full px-1.5">
                           <TeamColumn
-                            team={team}
-                            onMemberClick={(m) => memberClick(m, team)}
+                            team={teamsList[0]}
+                            onMemberClick={(m) => memberClick(m, teamsList[0])}
                             searchQuery={searchQuery}
                           />
                         </div>
+                      </>
+                    ) : (
+                      <div className="flex w-full">
+                        {teamsList.map((team, j) => (
+                          <div
+                            key={team.id}
+                            className="flex-1 flex flex-col items-center relative"
+                          >
+                            <div
+                              className="absolute top-0 h-0.5 bg-accent"
+                              style={{
+                                left: j === 0 ? '50%' : 0,
+                                right: j === teamsList.length - 1 ? '50%' : 0,
+                              }}
+                            />
+                            <div className="w-0.5 h-5 bg-accent" />
+                            <div className="w-full px-1.5">
+                              <TeamColumn
+                                team={team}
+                                onMemberClick={(m) => memberClick(m, team)}
+                                searchQuery={searchQuery}
+                              />
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                );
+              })}
+            </div>
+          </div>
 
-      <MemberModal member={selectedMember} onClose={() => setSelectedMember(null)} />
-      <ExecutiveModal executive={selectedExec} onClose={() => setSelectedExec(null)} />
+          <MemberModal member={selectedMember} onClose={() => setSelectedMember(null)} />
+          <ExecutiveModal executive={selectedExec} onClose={() => setSelectedExec(null)} />
+        </>
+      )}
+
+      <EmailShareModal
+        isOpen={emailShareOpen}
+        onClose={() => setEmailShareOpen(false)}
+        generatePdfBase64={generatePdfBase64}
+        viewMode={viewMode}
+        contacts={(() => {
+          const all = [
+            ...executives.filter((e) => e.email).map((e) => ({ name: e.name, email: e.email!, role: e.role, photo: e.photo })),
+            ...teams.flatMap((t) => t.members.filter((m) => m.email && !m.isVacancy).map((m) => ({ name: m.name, email: m.email!, role: m.role, photo: m.photo }))),
+          ];
+          const seen = new Set<string>();
+          return all.filter((c) => { if (seen.has(c.email)) return false; seen.add(c.email); return true; });
+        })()}
+      />
     </div>
   );
 }

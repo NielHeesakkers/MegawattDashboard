@@ -88,6 +88,7 @@ export default function MemberManager() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [removePhoto, setRemovePhoto] = useState(false);
   const [filterTeam, setFilterTeam] = useState<string>(searchParams.get('team') || 'all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [customSubGroup, setCustomSubGroup] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -228,7 +229,14 @@ export default function MemberManager() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const filtered = filterTeam === 'all' ? members : members.filter((m) => String(m.teamId) === filterTeam);
+  const teamFiltered = filterTeam === 'all' ? members : members.filter((m) => String(m.teamId) === filterTeam);
+  const filtered = (searchQuery
+    ? teamFiltered.filter((m) => {
+        const q = searchQuery.toLowerCase();
+        return m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q) || (m.email && m.email.toLowerCase().includes(q));
+      })
+    : teamFiltered
+  ).sort((a, b) => a.name.localeCompare(b.name));
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -258,8 +266,8 @@ export default function MemberManager() {
         </button>
       </div>
 
-      {/* Filter */}
-      <div className="mb-4">
+      {/* Filter + Search */}
+      <div className="flex gap-3 mb-4">
         <select
           value={filterTeam}
           onChange={(e) => setFilterTeam(e.target.value)}
@@ -270,6 +278,23 @@ export default function MemberManager() {
             <option key={t.id} value={String(t.id)}>{t.name}</option>
           ))}
         </select>
+        <div className="relative flex-1 max-w-xs">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Zoek op naam, functie..."
+            className="w-full pl-9 pr-3 py-2 rounded-lg bg-bg-card border border-white/10 text-white text-sm placeholder-text-muted focus:outline-none focus:border-accent-gold"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-white">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Team info bar — when a specific team is selected, click to edit */}

@@ -7,7 +7,7 @@ import { logAudit } from '../lib/audit';
 
 const router = Router();
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'megawatt-organigram-secret-2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'megawatt-dashboard-secret-2026';
 
 router.post('/login', async (req: Request, res: Response) => {
   const { username, password } = req.body;

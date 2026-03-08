@@ -1,9 +1,15 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { readFileSync } from 'fs';
+import path from 'path';
 import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+const PROJECT_ROOT = __dirname.includes(path.join('dist', 'server'))
+  ? path.resolve(__dirname, '../../..')
+  : path.resolve(__dirname, '../..');
 
 // Admin: get audit logs with pagination
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
@@ -24,6 +30,16 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
   ]);
 
   res.json({ logs, total, page, pages: Math.ceil(total / limit) });
+});
+
+// GET /api/audit-logs/changelog — return CHANGELOG.md content
+router.get('/changelog', authMiddleware, async (_req: Request, res: Response) => {
+  try {
+    const content = readFileSync(path.join(PROJECT_ROOT, 'CHANGELOG.md'), 'utf-8');
+    res.json({ content });
+  } catch {
+    res.json({ content: '' });
+  }
 });
 
 export default router;

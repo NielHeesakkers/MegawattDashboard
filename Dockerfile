@@ -1,5 +1,5 @@
 # ============================================================
-# Megawatt Organigram — Production Dockerfile
+# Megawatt Dashboard — Production Dockerfile
 # Single container: Node API + built React frontend + Python face-crop
 # ============================================================
 

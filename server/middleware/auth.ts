@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'megawatt-organigram-secret-2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'megawatt-dashboard-secret-2026';
 
 export interface AuthRequest extends Request {
   adminId?: number;

@@ -36,15 +36,21 @@ interface BackupData {
   executives: any[];
   teams: any[];
   members: any[];
+  clientTeams?: any[];
+  clientTeamMembers?: any[];
+  clients?: any[];
 }
 
 // Export: download ZIP with data.json + uploads/
 router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const [executives, teams, members] = await Promise.all([
+    const [executives, teams, members, clientTeams, clientTeamMembers, clients] = await Promise.all([
       prisma.executive.findMany({ orderBy: { level: 'asc' } }),
       prisma.team.findMany({ orderBy: { order: 'asc' } }),
       prisma.member.findMany({ orderBy: [{ teamId: 'asc' }, { order: 'asc' }] }),
+      prisma.clientTeam.findMany({ orderBy: { order: 'asc' } }),
+      prisma.clientTeamMember.findMany({ orderBy: { order: 'asc' } }),
+      prisma.client.findMany({ orderBy: [{ clientTeamId: 'asc' }, { order: 'asc' }] }),
     ]);
 
     const backupData: BackupData = {
@@ -53,6 +59,9 @@ router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) =>
       executives,
       teams,
       members,
+      clientTeams,
+      clientTeamMembers,
+      clients,
     };
 
     const archive = archiver('zip', { zlib: { level: 9 } });
@@ -102,6 +111,9 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
 
     // Replace data in transaction with ID remapping
     await prisma.$transaction(async (tx) => {
+      await tx.client.deleteMany();
+      await tx.clientTeamMember.deleteMany();
+      await tx.clientTeam.deleteMany();
       await tx.member.deleteMany();
       await tx.team.deleteMany();
       await tx.executive.deleteMany();
@@ -128,16 +140,58 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
       }
 
       // Insert members with remapped teamId
+      const memberIdMap = new Map<number, number>();
       for (const member of backupData.members) {
-        const { id: _oldId, team: _team, ...data } = member;
+        const { id: oldId, team: _team, ...data } = member;
         const newTeamId = teamIdMap.get(data.teamId);
-        if (!newTeamId) continue; // skip orphaned members
-        await tx.member.create({
+        if (!newTeamId) continue;
+        const created = await tx.member.create({
           data: {
             ...data,
             teamId: newTeamId,
           },
         });
+        memberIdMap.set(oldId, created.id);
+      }
+
+      // Insert client teams with remapped executiveId
+      if (backupData.clientTeams) {
+        const ctIdMap = new Map<number, number>();
+        for (const ct of backupData.clientTeams) {
+          const { id: oldId, members: _m, clients: _c, executive: _e, ...data } = ct;
+          const created = await tx.clientTeam.create({
+            data: {
+              ...data,
+              executiveId: data.executiveId ? (execIdMap.get(data.executiveId) ?? null) : null,
+            },
+          });
+          ctIdMap.set(oldId, created.id);
+        }
+
+        // Insert client team members with remapped IDs
+        if (backupData.clientTeamMembers) {
+          for (const ctm of backupData.clientTeamMembers) {
+            const { id: _oldId, member: _m, ...data } = ctm;
+            const newCtId = ctIdMap.get(data.clientTeamId);
+            const newMemberId = memberIdMap.get(data.memberId);
+            if (!newCtId || !newMemberId) continue;
+            await tx.clientTeamMember.create({
+              data: { ...data, clientTeamId: newCtId, memberId: newMemberId },
+            });
+          }
+        }
+
+        // Insert clients with remapped clientTeamId
+        if (backupData.clients) {
+          for (const client of backupData.clients) {
+            const { id: _oldId, clientTeam: _ct, ...data } = client;
+            const newCtId = ctIdMap.get(data.clientTeamId);
+            if (!newCtId) continue;
+            await tx.client.create({
+              data: { ...data, clientTeamId: newCtId },
+            });
+          }
+        }
       }
     });
 
@@ -181,7 +235,7 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
   }
 });
 
-// Clear: delete all organigram data + photos (keep admin users + audit logs)
+// Clear: delete all dashboard data + photos (keep admin users + audit logs)
 router.delete('/clear', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const [memberCount, teamCount, execCount] = await Promise.all([
@@ -191,6 +245,9 @@ router.delete('/clear', authMiddleware, async (req: AuthRequest, res: Response) 
     ]);
 
     await prisma.$transaction(async (tx) => {
+      await tx.client.deleteMany();
+      await tx.clientTeamMember.deleteMany();
+      await tx.clientTeam.deleteMany();
       await tx.member.deleteMany();
       await tx.team.deleteMany();
       await tx.executive.deleteMany();

@@ -19,29 +19,66 @@ model Team {
 }
 
 model Member {
-  id         Int      @id @default(autoincrement())
-  name       String
-  role       String
-  email      String?
-  phone      String?
-  photo      String?
-  teamId     Int
-  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  isVacancy  Boolean  @default(false)
-  isTeamLead Boolean  @default(false)
-  order      Int
-  subGroup   String?
+  id                    Int                @id @default(autoincrement())
+  name                  String
+  role                  String
+  email                 String?
+  phone                 String?
+  photo                 String?
+  teamId                Int
+  team                  Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  isVacancy             Boolean            @default(false)
+  isTeamLead            Boolean            @default(false)
+  order                 Int
+  subGroup              String?
+  clientTeamMemberships ClientTeamMember[]
 }
 
 model Executive {
-  id    Int     @id @default(autoincrement())
-  name  String
-  role  String
-  photo String?
-  email String?
-  phone String?
-  level Int
-  teams Team[]
+  id                    Int                @id @default(autoincrement())
+  name                  String
+  role                  String
+  photo                 String?
+  email                 String?
+  phone                 String?
+  level                 Int
+  teams                 Team[]
+  clientTeams           ClientTeam[]
+  clientTeamMemberships ClientTeamMember[]
+}
+
+model ClientTeam {
+  id          Int                @id @default(autoincrement())
+  name        String
+  order       Int
+  executiveId Int?
+  executive   Executive?         @relation(fields: [executiveId], references: [id], onDelete: SetNull)
+  members     ClientTeamMember[]
+  clients     Client[]
+}
+
+model ClientTeamMember {
+  id           Int        @id @default(autoincrement())
+  clientTeamId Int
+  clientTeam   ClientTeam @relation(fields: [clientTeamId], references: [id], onDelete: Cascade)
+  memberId     Int?
+  member       Member?    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  executiveId  Int?
+  executive    Executive? @relation(fields: [executiveId], references: [id], onDelete: Cascade)
+  role         String
+  order        Int
+
+  @@unique([clientTeamId, memberId])
+  @@unique([clientTeamId, executiveId])
+}
+
+model Client {
+  id           Int        @id @default(autoincrement())
+  name         String
+  url          String?
+  clientTeamId Int
+  clientTeam   ClientTeam @relation(fields: [clientTeamId], references: [id], onDelete: Cascade)
+  order        Int
 }
 
 model AuditLog {
@@ -58,4 +95,9 @@ model Admin {
   id           Int    @id @default(autoincrement())
   username     String @unique
   passwordHash String
+}
+
+model Setting {
+  key   String @id
+  value String
 }

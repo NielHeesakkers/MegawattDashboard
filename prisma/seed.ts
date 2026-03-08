@@ -90,6 +90,9 @@ async function main() {
   }
 
   // Clear existing data
+  await prisma.client.deleteMany();
+  await prisma.clientTeamMember.deleteMany();
+  await prisma.clientTeam.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.member.deleteMany();
   await prisma.team.deleteMany();
@@ -122,19 +125,20 @@ async function main() {
 
   // Create teams
   const teams = await Promise.all([
-    prisma.team.create({ data: { name: 'Staff', color: '#c9a84c', order: 0 } }),
-    prisma.team.create({ data: { name: 'Strategy', color: '#c9a84c', order: 1 } }),
-    prisma.team.create({ data: { name: 'Concept', color: '#c9a84c', order: 2 } }),
-    prisma.team.create({ data: { name: 'Creation', color: '#c9a84c', order: 3 } }),
-    prisma.team.create({ data: { name: 'Commerce', color: '#c9a84c', order: 4 } }),
-    prisma.team.create({ data: { name: 'Client', color: '#c9a84c', order: 5 } }),
-    prisma.team.create({ data: { name: 'Project', color: '#c9a84c', order: 6 } }),
-    prisma.team.create({ data: { name: 'Experience', color: '#c9a84c', order: 7 } }),
-    prisma.team.create({ data: { name: 'Production', color: '#c9a84c', order: 8 } }),
-    prisma.team.create({ data: { name: 'Logistics', color: '#c9a84c', order: 9 } }),
+    prisma.team.create({ data: { name: 'Directie', color: '#c9a84c', order: 0 } }),
+    prisma.team.create({ data: { name: 'Staff', color: '#c9a84c', order: 1 } }),
+    prisma.team.create({ data: { name: 'Strategy', color: '#c9a84c', order: 2 } }),
+    prisma.team.create({ data: { name: 'Concept', color: '#c9a84c', order: 3 } }),
+    prisma.team.create({ data: { name: 'Creation', color: '#c9a84c', order: 4 } }),
+    prisma.team.create({ data: { name: 'Commerce', color: '#c9a84c', order: 5 } }),
+    prisma.team.create({ data: { name: 'Client', color: '#c9a84c', order: 6 } }),
+    prisma.team.create({ data: { name: 'Project', color: '#c9a84c', order: 7 } }),
+    prisma.team.create({ data: { name: 'Experience', color: '#c9a84c', order: 8 } }),
+    prisma.team.create({ data: { name: 'Production', color: '#c9a84c', order: 9 } }),
+    prisma.team.create({ data: { name: 'Logistics', color: '#c9a84c', order: 10 } }),
   ]);
 
-  const [staff, strategy, concept, creation, commerce, client, project, experience, production, logistics] = teams;
+  const [directie, staff, strategy, concept, creation, commerce, client, project, experience, production, logistics] = teams;
 
   // Link teams to their directors
   const ceo = await prisma.executive.findFirst({ where: { level: 0 } });
@@ -162,6 +166,11 @@ async function main() {
 
   // All members data
   const allMembers = [
+    // Directie
+    { name: 'Stephan Kwast', role: 'Chief Executive Officer', teamId: directie.id, order: 0, email: 's.kwast@megawatt.agency' },
+    { name: 'Simon Coolen', role: 'Executive Creative Director', teamId: directie.id, order: 1, email: 's.coolen@megawatt.agency' },
+    { name: 'Richard Dillen', role: 'Chief Commercial Officer', teamId: directie.id, order: 2, email: 'r.dillen@megawatt.agency' },
+    { name: 'Rachelle Berkelaar', role: 'Operational Director', teamId: directie.id, order: 3, email: 'r.berkelaar@megawatt.agency' },
     // Staff
     { name: 'Gonnie Van der Kruijs', role: 'Finance & Control Manager', teamId: staff.id, order: 0, subGroup: 'Finance', email: 'g.vanderkruijs@megawatt.agency' },
     { name: 'Jitte Kleinbekman', role: 'People Development Manager', teamId: staff.id, order: 1, subGroup: 'HR', email: 'j.kleinbekman@megawatt.agency' },
@@ -248,6 +257,104 @@ async function main() {
     if (!member.isVacancy) {
       console.log(`  ${member.name}: ${photo ? 'OK' : 'no photo'}`);
     }
+  }
+
+  // ---- Client Teams ----
+  console.log('\nSeeding client teams...');
+
+  if (richard && rachelle) {
+    // Create 3 client teams
+    const ct1 = await prisma.clientTeam.create({ data: { name: 'Klantteam 1', order: 0, executiveId: richard.id } });
+    const ct2 = await prisma.clientTeam.create({ data: { name: 'Klantteam 2', order: 1, executiveId: richard.id } });
+    const ct3 = await prisma.clientTeam.create({ data: { name: 'Klantteam 3', order: 2, executiveId: rachelle.id } });
+
+    // Lookup members by name for assignment
+    const findMember = async (name: string) => prisma.member.findFirst({ where: { name } });
+
+    const tessa = await findMember('Tessa Maas');
+    const bramBurgt = await findMember('Bram van der Burgt');
+    const bo = await findMember('Bo Verbiest');
+    const manon = await findMember('Manon Heijens');
+    const pieter = await findMember('Pieter Claessens');
+    const amber = await findMember('Amber Franken');
+    const paulien = await findMember('Paulien Kersjes');
+    const lynn = await findMember('Lynn Verhoeven');
+    const debby = await findMember('Debby de Jonge');
+
+    // Assign CL and PM's to client teams
+    const assignments = [
+      // Klantteam 1: Tessa (CL), Manon + Pieter (PM)
+      { clientTeamId: ct1.id, memberId: tessa?.id, role: 'CL', order: 0 },
+      { clientTeamId: ct1.id, memberId: manon?.id, role: 'PM', order: 1 },
+      { clientTeamId: ct1.id, memberId: pieter?.id, role: 'PM', order: 2 },
+      // Klantteam 2: Bram (CL), Amber + Paulien (PM)
+      { clientTeamId: ct2.id, memberId: bramBurgt?.id, role: 'CL', order: 0 },
+      { clientTeamId: ct2.id, memberId: amber?.id, role: 'PM', order: 1 },
+      { clientTeamId: ct2.id, memberId: paulien?.id, role: 'PM', order: 2 },
+      // Klantteam 3: Bo (CL), Lynn + Debby (PM)
+      { clientTeamId: ct3.id, memberId: bo?.id, role: 'CL', order: 0 },
+      { clientTeamId: ct3.id, memberId: lynn?.id, role: 'PM', order: 1 },
+      { clientTeamId: ct3.id, memberId: debby?.id, role: 'PM', order: 2 },
+    ];
+
+    for (const a of assignments) {
+      if (a.memberId) {
+        await prisma.clientTeamMember.create({ data: { clientTeamId: a.clientTeamId, memberId: a.memberId, role: a.role, order: a.order } });
+      }
+    }
+
+    // Create clients (companies)
+    const clientsData = [
+      // Klantteam 1
+      { name: 'Haribo', clientTeamId: ct1.id, order: 0 },
+      { name: 'Fanta', clientTeamId: ct1.id, order: 1 },
+      { name: 'Powerade', clientTeamId: ct1.id, order: 2 },
+      { name: 'Aquarius', clientTeamId: ct1.id, order: 3 },
+      { name: 'Jack & Coke', clientTeamId: ct1.id, order: 4 },
+      { name: 'Bacardi Coke', clientTeamId: ct1.id, order: 5 },
+      { name: 'Absolut Sprite', clientTeamId: ct1.id, order: 6 },
+      { name: 'Van Haren', clientTeamId: ct1.id, order: 7 },
+      { name: 'Stichd', clientTeamId: ct1.id, order: 8 },
+      { name: 'Chiquita', clientTeamId: ct1.id, order: 9 },
+      { name: 'Mexicano', clientTeamId: ct1.id, order: 10 },
+      { name: 'Grolsch', clientTeamId: ct1.id, order: 11 },
+      { name: 'BBE', clientTeamId: ct1.id, order: 12 },
+      { name: 'JDE', clientTeamId: ct1.id, order: 13 },
+      { name: 'Chio', clientTeamId: ct1.id, order: 14 },
+      // Klantteam 2
+      { name: 'Heineken', clientTeamId: ct2.id, order: 0 },
+      { name: 'Klepierre', clientTeamId: ct2.id, order: 1 },
+      { name: 'Netflix', clientTeamId: ct2.id, order: 2 },
+      { name: 'Desperados', clientTeamId: ct2.id, order: 3 },
+      { name: 'Versuni', clientTeamId: ct2.id, order: 4 },
+      { name: 'Swiss Sense', clientTeamId: ct2.id, order: 5 },
+      { name: 'USD', clientTeamId: ct2.id, order: 6 },
+      { name: 'Odido', clientTeamId: ct2.id, order: 7 },
+      { name: 'Mars', clientTeamId: ct2.id, order: 8 },
+      { name: 'Akzo Nobel', clientTeamId: ct2.id, order: 9 },
+      { name: 'Dior', clientTeamId: ct2.id, order: 10 },
+      { name: 'Spirotech', clientTeamId: ct2.id, order: 11 },
+      { name: 'Galderma', clientTeamId: ct2.id, order: 12 },
+      { name: 'Roorda - BZK', clientTeamId: ct2.id, order: 13 },
+      { name: 'Storytel', clientTeamId: ct2.id, order: 14 },
+      // Klantteam 3
+      { name: 'Arla', clientTeamId: ct3.id, order: 0 },
+      { name: 'Cloetta', clientTeamId: ct3.id, order: 1 },
+      { name: 'Neutrogena', clientTeamId: ct3.id, order: 2 },
+      { name: 'Oreo', clientTeamId: ct3.id, order: 3 },
+      { name: 'Hellofresh', clientTeamId: ct3.id, order: 4 },
+      { name: 'Roorda - Belastingdienst', clientTeamId: ct3.id, order: 5 },
+      { name: 'NLO', clientTeamId: ct3.id, order: 6 },
+      { name: 'Ikea', clientTeamId: ct3.id, order: 7 },
+      { name: 'C&A', clientTeamId: ct3.id, order: 8 },
+      { name: 'Arriva', clientTeamId: ct3.id, order: 9 },
+    ];
+
+    for (const c of clientsData) {
+      await prisma.client.create({ data: c });
+    }
+
+    console.log('Client teams seeded: 3 teams, 9 assignments, 40 clients');
   }
 
   console.log('\nSeed completed successfully!');
