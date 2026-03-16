@@ -1,6 +1,6 @@
 # ============================================================
 # Megawatt Dashboard — Production Dockerfile
-# Single container: Node API + built React frontend + Python face-crop
+# Single container: Node API + built React frontend
 # ============================================================
 
 # --- Stage 1: Build frontend + backend ---
@@ -24,19 +24,8 @@ RUN npx prisma generate && \
     npx tsc -p tsconfig.server.json
 
 
-# --- Stage 2: Python face-crop environment ---
-FROM python:3.12-slim AS python-env
-
-RUN pip install --no-cache-dir face-crop-plus
-
-
-# --- Stage 3: Production runtime ---
+# --- Stage 2: Production runtime ---
 FROM node:20-slim
-
-# Install Python runtime (needed for face-crop-plus at runtime)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 python3-venv libgl1 libglib2.0-0 && \
-    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -47,13 +36,6 @@ COPY --from=builder /app/package.json .
 
 # Copy Prisma schema + migrations + seed (needed for migrate deploy + first-run seed)
 COPY prisma/ prisma/
-
-# Copy face-crop Python script
-COPY server/lib/face_crop.py server/lib/face_crop.py
-
-# Set up Python venv with face-crop-plus
-RUN python3 -m venv /app/.venv && \
-    /app/.venv/bin/pip install --no-cache-dir face-crop-plus
 
 # Create data + uploads dirs
 RUN mkdir -p /app/data /app/uploads

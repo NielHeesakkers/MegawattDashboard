@@ -1,11 +1,8 @@
 import multer from 'multer';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
-
-const execFileAsync = promisify(execFile);
+import { faceCrop } from '../lib/face-crop';
 
 // Derive project root from this file's location:
 // Dev (tsx):  __dirname = <project>/server/middleware       → root = ../..
@@ -18,9 +15,6 @@ const uploadsDir = path.resolve(PROJECT_ROOT, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-
-const PYTHON_BIN = path.resolve(PROJECT_ROOT, '.venv/bin/python3');
-const FACE_CROP_SCRIPT = path.resolve(PROJECT_ROOT, 'server/lib/face_crop.py');
 
 const storage = multer.memoryStorage();
 
@@ -45,12 +39,10 @@ export async function processPhoto(req: Request, _res: Response, next: NextFunct
   const tmpInput = path.join(uploadsDir, `tmp-${filename}`);
 
   try {
-    // Write buffer to temp file for face-crop-plus
+    // Write buffer to temp file for face-crop
     fs.writeFileSync(tmpInput, req.file.buffer);
 
-    await execFileAsync(PYTHON_BIN, [FACE_CROP_SCRIPT, tmpInput, outputPath, '200', '0.4'], {
-      timeout: 30000,
-    });
+    await faceCrop(tmpInput, outputPath, 200, 0.4);
 
     req.body.photo = `/uploads/${filename}`;
     next();

@@ -1,8 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { execFileSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { faceCrop } from '../server/lib/face-crop';
 
 const prisma = new PrismaClient();
 
@@ -52,10 +52,7 @@ const photoMap: Record<string, string> = {
   'Romano Henar': 'Romano-Henar.jpg',
 };
 
-const PYTHON_BIN = path.resolve(__dirname, '../.venv/bin/python3');
-const FACE_CROP_SCRIPT = path.resolve(__dirname, '../server/lib/face_crop.py');
-
-function processPhoto(name: string): string | null {
+async function processPhoto(name: string): Promise<string | null> {
   const filename = photoMap[name];
   if (!filename) return null;
 
@@ -69,11 +66,8 @@ function processPhoto(name: string): string | null {
   const outputPath = path.join(UPLOADS_DIR, outputFilename);
 
   try {
-    const result = execFileSync(PYTHON_BIN, [FACE_CROP_SCRIPT, sourcePath, outputPath, '200', '0.55'], {
-      timeout: 30000,
-      encoding: 'utf-8',
-    });
-    const method = result.trim().includes('face_detected') ? 'face' : 'fallback';
+    const result = await faceCrop(sourcePath, outputPath, 200, 0.55);
+    const method = result.method === 'face_detected' ? 'face' : 'fallback';
     console.log(`    [${method}] ${outputFilename}`);
   } catch (err: any) {
     console.warn(`    face-crop failed for ${name}, skipping: ${err.message}`);
@@ -116,7 +110,7 @@ async function main() {
   ];
 
   for (const exec of execData) {
-    const photo = processPhoto(exec.name);
+    const photo = await processPhoto(exec.name);
     await prisma.executive.create({
       data: { ...exec, photo },
     });
@@ -240,7 +234,7 @@ async function main() {
   ];
 
   for (const member of allMembers) {
-    const photo = member.isVacancy ? null : processPhoto(member.name);
+    const photo = member.isVacancy ? null : await processPhoto(member.name);
     await prisma.member.create({
       data: {
         name: member.name,
