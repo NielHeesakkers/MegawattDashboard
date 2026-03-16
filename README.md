@@ -1,13 +1,15 @@
-# MEGAWATT Organigram
+# MEGAWATT Dashboard
 
-Interactief organigram voor Megawatt Agency. Dark-themed web app met hiërarchische visualisatie van directie, teams en medewerkers.
+Interactief dashboard voor Megawatt Agency. Dark-themed web app met organigram, klantteams en beheer van medewerkers.
 
 ### Functionaliteiten
 
 - **Organigram** — Visueel overzicht van CEO, directie, teams en medewerkers met foto's
+- **Klantteams** — Overzicht van klantteams met client leads, project managers en klanten
 - **Zoeken** — Zoek op naam of functie, met highlight van resultaten
 - **Contactgegevens** — Klik op een medewerker of directielid voor e-mail en telefoon
-- **PDF Export** — Download het organigram als PDF
+- **PDF Export** — Download het organigram of klantteams als PDF
+- **E-mail delen** — Deel het organigram of klantteams via e-mail
 - **Admin panel** — Beheer teams, medewerkers, directieleden en admin gebruikers
 - **Foto management** — Upload foto's met automatische face-crop
 - **Backup** — Export en import van alle data als ZIP, inclusief foto's
@@ -46,10 +48,10 @@ Create a `docker-compose.yml`:
 
 ```yaml
 services:
-  organigram:
+  dashboard:
     build:
-      context: https://<GITHUB_PAT>@github.com/NielHeesakkers/megawatt-organigram.git#main
-    container_name: megawatt-organigram
+      context: https://<GITHUB_PAT>@github.com/NielHeesakkers/MegawattDashboard.git#main
+    container_name: megawatt-dashboard
     ports:
       - "3001:3001"
     environment:
@@ -58,9 +60,15 @@ services:
       - DATABASE_URL=file:/app/data/dev.db
       - JWT_SECRET=your-secret-here
     volumes:
-      - ./data:/app/data
-      - ./uploads:/app/uploads
+      - dashboard-data:/app/data
+      - dashboard-uploads:/app/uploads
+      - dashboard-backups:/app/Backup
     restart: unless-stopped
+
+volumes:
+  dashboard-data:
+  dashboard-uploads:
+  dashboard-backups:
 ```
 
 Replace `<GITHUB_PAT>` with a GitHub Personal Access Token (repo scope).

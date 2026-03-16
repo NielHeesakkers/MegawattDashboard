@@ -42,13 +42,20 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
     const emailSubject = subject || 'Megawatt Organigram';
     const attachmentName = fileName || 'MEGAWATT-Organigram.pdf';
+    const isKlantteams = (subject || '').toLowerCase().includes('klantteam');
+    const bodyText = isKlantteams
+      ? 'Zie de bijlage voor de Megawatt klantteams.'
+      : 'Zie de bijlage voor het Megawatt organigram.';
+    const bodyHtml = isKlantteams
+      ? '<p>Zie de bijlage voor de <strong>Megawatt klantteams</strong>.</p>'
+      : '<p>Zie de bijlage voor het <strong>Megawatt organigram</strong>.</p>';
 
     await transporter.sendMail({
       from: smtp.fromName ? `"${smtp.fromName}" <${smtp.fromEmail}>` : smtp.fromEmail,
       to,
       subject: emailSubject,
-      text: 'Zie de bijlage voor het Megawatt organigram.',
-      html: '<p>Zie de bijlage voor het <strong>Megawatt organigram</strong>.</p>',
+      text: bodyText,
+      html: bodyHtml,
       attachments: [
         {
           filename: attachmentName,

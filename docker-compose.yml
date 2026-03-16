@@ -1,7 +1,6 @@
 services:
   dashboard:
-    build:
-      context: https://github.com/NielHeesakkers/MegawattDashboard.git#main
+    build: .
     container_name: megawatt-dashboard
     ports:
       - "3001:3001"

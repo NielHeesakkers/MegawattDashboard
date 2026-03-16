@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "=== Megawatt Organigram Starting ==="
+echo "=== Megawatt Dashboard Starting ==="
 
 # Run database migrations
 echo "Running database migrations..."
