@@ -93,11 +93,14 @@ async function main() {
   await prisma.executive.deleteMany();
   await prisma.admin.deleteMany();
 
-  // Create admin user
-  const passwordHash = await bcrypt.hash('megawatt2026', 10);
+  // Create admin user (from env vars or defaults)
+  const adminUser = process.env.ADMIN_USERNAME || 'admin';
+  const adminPass = process.env.ADMIN_PASSWORD || 'megawatt2026';
+  const passwordHash = await bcrypt.hash(adminPass, 10);
   await prisma.admin.create({
-    data: { username: 'admin', passwordHash },
+    data: { username: adminUser, passwordHash },
   });
+  console.log(`Admin user created: ${adminUser}`);
 
   console.log('Processing executive photos...');
 
