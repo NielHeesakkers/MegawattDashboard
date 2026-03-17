@@ -101,3 +101,42 @@ model Setting {
   key   String @id
   value String
 }
+
+model Klant {
+  id            Int       @id @default(autoincrement())
+  name          String    @unique
+  contactPerson String?
+  email         String?
+  projects      Project[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Project {
+  id            Int          @id @default(autoincrement())
+  klantId       Int
+  klant         Klant        @relation(fields: [klantId], references: [id], onDelete: Restrict)
+  projectNumber String       @unique
+  startDate     DateTime
+  endDate       DateTime
+  status        String       @default("active")
+  contactPerson String?
+  email         String?
+  activations   Activation[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([klantId])
+}
+
+model Activation {
+  id        Int       @id @default(autoincrement())
+  projectId Int
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  location  String    @default("")
+  date      DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([projectId])
+}
