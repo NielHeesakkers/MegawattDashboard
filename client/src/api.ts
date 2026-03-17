@@ -150,6 +150,16 @@ export interface Client {
   order: number;
 }
 
+export interface Klant {
+  id: number;
+  name: string;
+  contactPerson: string | null;
+  email: string | null;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { projects: number };
+}
+
 // Client Teams API
 export const fetchClientTeams = () => api.get<ClientTeam[]>('/client-teams').then((r) => r.data);
 export const createClientTeam = (data: Partial<ClientTeam>) => api.post<ClientTeam>('/client-teams', data).then((r) => r.data);
@@ -174,6 +184,13 @@ export const updateClient = (id: number, data: Partial<Client>) => api.put<Clien
 export const deleteClient = (id: number) => api.delete(`/clients/${id}`);
 export const reorderClients = (orders: { id: number; order: number }[]) =>
   api.put('/clients/reorder/batch', { orders });
+
+// Klanten
+export const fetchKlanten = () => api.get<Klant[]>('/klanten').then((r) => r.data);
+export const fetchKlant = (id: number) => api.get<Klant>(`/klanten/${id}`).then((r) => r.data);
+export const createKlant = (data: Partial<Klant>) => api.post<Klant>('/klanten', data).then((r) => r.data);
+export const updateKlant = (id: number, data: Partial<Klant>) => api.put<Klant>(`/klanten/${id}`, data).then((r) => r.data);
+export const deleteKlant = (id: number) => api.delete(`/klanten/${id}`);
 
 // Backup operations
 export const exportBackup = () =>
