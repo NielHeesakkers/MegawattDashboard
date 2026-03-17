@@ -23,6 +23,7 @@ import clientTeamMemberRoutes from './routes/client-team-members';
 import clientRoutes from './routes/clients';
 import settingsRoutes from './routes/settings';
 import shareEmailRoutes from './routes/share-email';
+import klantenRoutes from './routes/klanten';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -43,6 +44,7 @@ app.use('/api/client-team-members', clientTeamMemberRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/share-email', shareEmailRoutes);
+app.use('/api/klanten', klantenRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
