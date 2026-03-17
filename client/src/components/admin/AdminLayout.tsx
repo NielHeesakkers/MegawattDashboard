@@ -56,14 +56,35 @@ function LoginForm() {
   );
 }
 
-const navItems = [
-  { to: '/admin', label: 'Dashboard' },
-  { to: '/admin/members', label: 'Medewerkers', divider: true },
-  { to: '/admin/directie', label: 'Directie' },
-  { to: '/admin/overzicht', label: 'Organigram', divider: true },
-  { to: '/admin/client-teams', label: 'Klantteams', divider: true },
-  { to: '/admin/settings', label: 'Instellingen', divider: true },
-  { to: '/admin/versions', label: 'Versiegeschiedenis' },
+type NavItem = { type: 'item'; to: string; label: string; divider?: boolean };
+type NavGroup = { type: 'group'; label: string; divider?: boolean; children: NavItem[] };
+type NavEntry = NavItem | NavGroup;
+
+const navItems: NavEntry[] = [
+  { type: 'item', to: '/admin', label: 'Dashboard' },
+  { type: 'item', to: '/admin/members', label: 'Medewerkers' },
+  { type: 'item', to: '/admin/directie', label: 'Directie' },
+  { type: 'item', to: '/admin/klanten', label: 'Klanten' },
+  {
+    type: 'group',
+    label: 'Intern',
+    divider: true,
+    children: [
+      { type: 'item', to: '/admin/overzicht', label: 'Organigram' },
+      { type: 'item', to: '/admin/client-teams', label: 'Klantteams' },
+    ],
+  },
+  {
+    type: 'group',
+    label: 'Planning',
+    divider: true,
+    children: [
+      { type: 'item', to: '/admin/projects', label: 'Projecten' },
+      { type: 'item', to: '/admin/superchargers', label: 'Superchargers' },
+    ],
+  },
+  { type: 'item', to: '/admin/settings', label: 'Instellingen', divider: true },
+  { type: 'item', to: '/admin/versions', label: 'Versiegeschiedenis' },
 ];
 
 const MegawattLogo = () => (
@@ -92,23 +113,50 @@ export default function AdminLayout() {
         </Link>
       </div>
       <nav className="flex-1 flex flex-col gap-[2px]">
-        {navItems.map((item) => (
-          <div key={item.to}>
-            {'divider' in item && item.divider && (
-              <div className="border-t border-[rgba(255,255,255,0.06)] my-2" />
-            )}
-            <Link
-              to={item.to}
-              className={`block px-3 py-2 rounded-[6px] text-[14px] transition-all duration-150 ${
-                location.pathname === item.to
-                  ? 'bg-accent-teal text-[#1a3a38]'
-                  : 'text-[rgba(255,255,255,0.7)] hover:text-[rgba(255,255,255,0.9)]'
-              }`}
-            >
-              {item.label}
-            </Link>
-          </div>
-        ))}
+        {navItems.map((entry) => {
+          if (entry.type === 'group') {
+            return (
+              <div key={entry.label}>
+                {entry.divider && (
+                  <div className="border-t border-[rgba(255,255,255,0.06)] my-2" />
+                )}
+                <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[rgba(255,255,255,0.4)]">
+                  {entry.label}
+                </div>
+                {entry.children.map((child) => (
+                  <Link
+                    key={child.to}
+                    to={child.to}
+                    className={`block px-3 py-2 pl-5 rounded-[6px] text-[14px] transition-all duration-150 ${
+                      location.pathname === child.to
+                        ? 'bg-accent-teal text-[#1a3a38]'
+                        : 'text-[rgba(255,255,255,0.7)] hover:text-[rgba(255,255,255,0.9)]'
+                    }`}
+                  >
+                    {child.label}
+                  </Link>
+                ))}
+              </div>
+            );
+          }
+          return (
+            <div key={entry.to}>
+              {entry.divider && (
+                <div className="border-t border-[rgba(255,255,255,0.06)] my-2" />
+              )}
+              <Link
+                to={entry.to}
+                className={`block px-3 py-2 rounded-[6px] text-[14px] transition-all duration-150 ${
+                  location.pathname === entry.to
+                    ? 'bg-accent-teal text-[#1a3a38]'
+                    : 'text-[rgba(255,255,255,0.7)] hover:text-[rgba(255,255,255,0.9)]'
+                }`}
+              >
+                {entry.label}
+              </Link>
+            </div>
+          );
+        })}
       </nav>
       <div className="flex-shrink-0 pt-3 border-t border-[rgba(255,255,255,0.08)] mt-auto">
         <p className="text-text-muted text-xs mb-2">Ingelogd als {username}</p>

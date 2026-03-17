@@ -12,6 +12,7 @@ import ExecutiveManager from './components/admin/ExecutiveManager';
 import VersionHistory from './components/admin/VersionHistory';
 import ClientTeamManager from './components/admin/ClientTeamManager';
 import Settings from './components/admin/Settings';
+import SuperchargersPlaceholder from './components/admin/SuperchargersPlaceholder';
 
 export default function App() {
   return (
@@ -31,6 +32,9 @@ export default function App() {
           <Route path="members" element={<MemberManager />} />
           <Route path="client-teams" element={<ClientTeamManager />} />
           <Route path="versions" element={<VersionHistory />} />
+          <Route path="klanten" element={<div>Klanten - coming soon</div>} />
+          <Route path="projects" element={<div>Projecten - coming soon</div>} />
+          <Route path="superchargers" element={<SuperchargersPlaceholder />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
