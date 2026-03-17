@@ -14,6 +14,8 @@ import ClientTeamManager from './components/admin/ClientTeamManager';
 import Settings from './components/admin/Settings';
 import SuperchargersPlaceholder from './components/admin/SuperchargersPlaceholder';
 import KlantenManager from './components/admin/KlantenManager';
+import ProjectList from './components/admin/ProjectList';
+import ProjectForm from './components/admin/ProjectForm';
 
 export default function App() {
   return (
@@ -34,7 +36,10 @@ export default function App() {
           <Route path="client-teams" element={<ClientTeamManager />} />
           <Route path="versions" element={<VersionHistory />} />
           <Route path="klanten" element={<KlantenManager />} />
-          <Route path="projects" element={<div>Projecten - coming soon</div>} />
+          <Route path="projects" element={<ProjectList />} />
+          <Route path="projects/new" element={<ProjectForm />} />
+          <Route path="projects/completed" element={<ProjectList />} />
+          <Route path="projects/:id" element={<ProjectForm />} />
           <Route path="superchargers" element={<SuperchargersPlaceholder />} />
           <Route path="settings" element={<Settings />} />
         </Route>
