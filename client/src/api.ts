@@ -160,6 +160,31 @@ export interface Klant {
   _count?: { projects: number };
 }
 
+export interface Activation {
+  id: number;
+  projectId: number;
+  location: string;
+  date: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Project {
+  id: number;
+  klantId: number;
+  klant?: Klant;
+  projectNumber: string;
+  startDate: string;
+  endDate: string;
+  status: 'active' | 'completed';
+  contactPerson: string | null;
+  email: string | null;
+  activations?: Activation[];
+  _count?: { activations: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Client Teams API
 export const fetchClientTeams = () => api.get<ClientTeam[]>('/client-teams').then((r) => r.data);
 export const createClientTeam = (data: Partial<ClientTeam>) => api.post<ClientTeam>('/client-teams', data).then((r) => r.data);
@@ -191,6 +216,24 @@ export const fetchKlant = (id: number) => api.get<Klant>(`/klanten/${id}`).then(
 export const createKlant = (data: Partial<Klant>) => api.post<Klant>('/klanten', data).then((r) => r.data);
 export const updateKlant = (id: number, data: Partial<Klant>) => api.put<Klant>(`/klanten/${id}`, data).then((r) => r.data);
 export const deleteKlant = (id: number) => api.delete(`/klanten/${id}`);
+
+// Projects
+export const fetchProjects = (status?: string) =>
+  api.get<Project[]>('/projects', { params: status ? { status } : {} }).then((r) => r.data);
+export const fetchProject = (id: number) =>
+  api.get<Project>(`/projects/${id}`).then((r) => r.data);
+export const createProject = (data: Partial<Project>) =>
+  api.post<Project>('/projects', data).then((r) => r.data);
+export const updateProject = (id: number, data: Partial<Project>) =>
+  api.put<Project>(`/projects/${id}`, data).then((r) => r.data);
+export const deleteProject = (id: number) => api.delete(`/projects/${id}`);
+
+// Activations (nested under projects)
+export const createActivation = (projectId: number, data: Partial<Activation>) =>
+  api.post<Activation>(`/projects/${projectId}/activations`, data).then((r) => r.data);
+export const updateActivation = (id: number, data: Partial<Activation>) =>
+  api.put<Activation>(`/projects/activations/${id}`, data).then((r) => r.data);
+export const deleteActivation = (id: number) => api.delete(`/projects/activations/${id}`);
 
 // Backup operations
 export const exportBackup = () =>
