@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { upload, processPhoto, deletePhoto } from '../middleware/upload';
@@ -7,8 +7,8 @@ import { logAudit } from '../lib/audit';
 const router = Router();
 const prisma = new PrismaClient();
 
-// Public: get all executives
-router.get('/', async (_req: Request, res: Response) => {
+// Protected: get all executives
+router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {
   const executives = await prisma.executive.findMany({
     orderBy: { level: 'asc' },
   });

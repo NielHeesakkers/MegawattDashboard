@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
@@ -6,8 +6,8 @@ import { logAudit } from '../lib/audit';
 const router = Router();
 const prisma = new PrismaClient();
 
-// Public: get all client teams with members, clients, and executive
-router.get('/', async (_req: Request, res: Response) => {
+// Protected: get all client teams with members, clients, and executive
+router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {
   const clientTeams = await prisma.clientTeam.findMany({
     include: {
       members: {

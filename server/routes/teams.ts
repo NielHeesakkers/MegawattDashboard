@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
@@ -6,8 +6,8 @@ import { logAudit } from '../lib/audit';
 const router = Router();
 const prisma = new PrismaClient();
 
-// Public: get all teams with members and executive
-router.get('/', async (_req: Request, res: Response) => {
+// Protected: get all teams with members and executive
+router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {
   const teams = await prisma.team.findMany({
     include: { members: { orderBy: { order: 'asc' } }, executive: true },
     orderBy: { order: 'asc' },
@@ -15,8 +15,8 @@ router.get('/', async (_req: Request, res: Response) => {
   res.json(teams);
 });
 
-// Public: get single team
-router.get('/:id', async (req: Request, res: Response) => {
+// Protected: get single team
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   const team = await prisma.team.findUnique({
     where: { id: Number(req.params.id) },
     include: { members: { orderBy: { order: 'asc' } }, executive: true },

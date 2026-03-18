@@ -7,7 +7,7 @@ const router = Router();
 const prisma = new PrismaClient();
 
 // List all klanten
-router.get('/', async (_req, res: Response) => {
+router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {
   const klanten = await prisma.klant.findMany({
     orderBy: { name: 'asc' },
     include: { _count: { select: { projects: true } } },
@@ -16,7 +16,7 @@ router.get('/', async (_req, res: Response) => {
 });
 
 // Get single klant
-router.get('/:id', async (req, res: Response) => {
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   const klant = await prisma.klant.findUnique({
     where: { id: Number(req.params.id) },
     include: { projects: true },

@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 // ── Projects ──
 
 // List projects (filterable by status)
-router.get('/', async (req, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   const status = req.query.status as string | undefined;
   const where = status ? { status } : {};
   const projects = await prisma.project.findMany({
@@ -24,7 +24,7 @@ router.get('/', async (req, res: Response) => {
 });
 
 // Get single project with activations
-router.get('/:id', async (req, res: Response) => {
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   const project = await prisma.project.findUnique({
     where: { id: Number(req.params.id) },
     include: {
@@ -118,7 +118,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
 // ── Activations (nested under project) ──
 
 // List activations for a project
-router.get('/:projectId/activations', async (req, res: Response) => {
+router.get('/:projectId/activations', authMiddleware, async (req: AuthRequest, res: Response) => {
   const activations = await prisma.activation.findMany({
     where: { projectId: Number(req.params.projectId) },
     orderBy: { createdAt: 'asc' },
