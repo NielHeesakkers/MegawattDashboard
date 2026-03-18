@@ -8,6 +8,10 @@ import SearchBar from './SearchBar';
 import KlantteamsView from './KlantteamsView';
 import EmailShareModal from './EmailShareModal';
 import { OrganigramSkeleton } from '../ui/Skeleton';
+import ProjectForm from '../admin/ProjectForm';
+import ProjectList from '../admin/ProjectList';
+import { useAuth } from '../../context/AuthContext';
+import LoginForm from '../ui/LoginForm';
 
 function MegawattLogo() {
   return (
@@ -17,21 +21,39 @@ function MegawattLogo() {
   );
 }
 
-type ViewMode = 'dashboard' | 'klantteams';
+type ViewMode = 'dashboard' | 'klantteams' | 'planning-nieuw' | 'planning-lopend' | 'planning-afgerond';
 
 type OrgBranch =
   | { kind: 'team'; team: Team }
   | { kind: 'director'; director: Executive; childTeams: Team[] };
 
 export default function OrganigramPage() {
+  const { isAuthenticated, isAdmin, hasTab, allowedTabs, logout, username } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('megawatt-view-mode');
-    return saved === 'klantteams' ? 'klantteams' : 'dashboard';
+    if (saved === 'klantteams' || saved === 'planning-nieuw' || saved === 'planning-lopend' || saved === 'planning-afgerond') return saved;
+    return 'dashboard';
   });
+  const [editingProjectId, setEditingProjectId] = useState<number | undefined>(undefined);
   const handleViewMode = (mode: ViewMode) => {
     setViewMode(mode);
+    setEditingProjectId(undefined);
     localStorage.setItem('megawatt-view-mode', mode);
   };
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const isInternView = viewMode === 'dashboard' || viewMode === 'klantteams';
+    const isPlanView = viewMode.startsWith('planning-');
+    if (isInternView && !hasTab('intern')) {
+      if (hasTab('planning')) {
+        handleViewMode('planning-lopend');
+      }
+    } else if (isPlanView && !hasTab('planning')) {
+      if (hasTab('intern')) {
+        handleViewMode('dashboard');
+      }
+    }
+  }, [isAuthenticated, allowedTabs]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [executives, setExecutives] = useState<Executive[]>([]);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
@@ -70,18 +92,28 @@ export default function OrganigramPage() {
     return () => window.removeEventListener('resize', measure);
   }, [teams, executives]);
 
+  const [internMenuOpen, setInternMenuOpen] = useState(false);
+  const internMenuRef = useRef<HTMLDivElement>(null);
+
+  const [planningMenuOpen, setPlanningMenuOpen] = useState(false);
+  const planningMenuRef = useRef<HTMLDivElement>(null);
+
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
-  // Close export menu on outside click
+  const isPlanningView = viewMode.startsWith('planning-');
+
+  // Close dropdown menus on outside click
   useEffect(() => {
-    if (!exportOpen) return;
+    if (!exportOpen && !internMenuOpen && !planningMenuOpen) return;
     const handler = (e: MouseEvent) => {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false);
+      if (exportOpen && exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false);
+      if (internMenuOpen && internMenuRef.current && !internMenuRef.current.contains(e.target as Node)) setInternMenuOpen(false);
+      if (planningMenuOpen && planningMenuRef.current && !planningMenuRef.current.contains(e.target as Node)) setPlanningMenuOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [exportOpen]);
+  }, [exportOpen, internMenuOpen, planningMenuOpen]);
 
   const captureImage = async () => {
     const activeRef = viewMode === 'klantteams' ? klantteamsCaptureRef : captureRef;
@@ -219,6 +251,22 @@ export default function OrganigramPage() {
 
   const memberClick = (m: Member, team: Team) => setSelectedMember({ ...m, team });
 
+  if (!isAuthenticated) {
+    return <LoginForm />;
+  }
+
+  if (allowedTabs.length === 0 && !isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-white mb-2">Geen toegang</h2>
+          <p className="text-[rgba(255,255,255,0.5)] text-sm mb-4">Je hebt geen toegang tot secties. Neem contact op met een beheerder.</p>
+          <button onClick={logout} className="px-4 py-2 rounded-[6px] bg-accent-teal text-[#1a3a38] font-semibold hover:opacity-85 transition-opacity cursor-pointer">Uitloggen</button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -237,29 +285,97 @@ export default function OrganigramPage() {
             <span className="text-[rgba(255,255,255,0.5)] text-[12px] font-medium">Dashboard</span>
           </div>
           <div className="flex-shrink-0 flex items-center gap-2 ml-auto">
-            {/* View toggle */}
-            <div className="flex h-7 rounded-lg overflow-hidden ring-1 ring-[rgba(255,255,255,0.15)]">
+            {/* Intern dropdown menu */}
+            {hasTab('intern') && (
+            <div ref={internMenuRef} className="relative">
               <button
-                onClick={() => handleViewMode('dashboard')}
-                className={`px-3 py-[5px] text-[12px] font-medium transition-all duration-150 cursor-pointer ${
-                  viewMode === 'dashboard'
-                    ? 'bg-accent text-bg-dark'
+                onClick={() => setInternMenuOpen(!internMenuOpen)}
+                className={`flex items-center gap-1.5 h-7 px-3 rounded-lg ring-1 ring-[rgba(255,255,255,0.15)] text-[12px] font-medium transition-all duration-150 cursor-pointer ${
+                  internMenuOpen
+                    ? 'bg-[rgba(255,255,255,0.12)] text-white'
                     : 'bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white'
                 }`}
               >
-                Organigram
+                Intern
+                <svg className={`w-3 h-3 transition-transform duration-150 ${internMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
               </button>
-              <button
-                onClick={() => handleViewMode('klantteams')}
-                className={`px-3 py-[5px] text-[12px] font-medium transition-all duration-150 cursor-pointer ${
-                  viewMode === 'klantteams'
-                    ? 'bg-accent text-bg-dark'
-                    : 'bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white'
-                }`}
-              >
-                Klantteams
-              </button>
+              {internMenuOpen && (
+                <div className="absolute top-full right-0 mt-[10px] z-50 w-44 bg-bg-surface rounded-xl ring-1 ring-[rgba(255,255,255,0.12)] shadow-2xl overflow-hidden animate-[slideDown_100ms_ease-out]">
+                  {([
+                    { mode: 'dashboard' as ViewMode, label: 'Organigram' },
+                    { mode: 'klantteams' as ViewMode, label: 'Klantteams' },
+                  ]).map((item, i) => (
+                    <div key={item.mode}>
+                      {i > 0 && <div className="border-t border-[rgba(255,255,255,0.06)]" />}
+                      <button
+                        onClick={() => { handleViewMode(item.mode); setInternMenuOpen(false); }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-[13px] transition-colors cursor-pointer ${
+                          viewMode === item.mode
+                            ? 'bg-accent/15 text-accent'
+                            : 'text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.08)] hover:text-white'
+                        }`}
+                      >
+                        {viewMode === item.mode && (
+                          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                          </svg>
+                        )}
+                        <span className={viewMode !== item.mode ? 'ml-[26px]' : ''}>{item.label}</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+            )}
+            {/* Planning dropdown menu */}
+            {hasTab('planning') && (
+            <div ref={planningMenuRef} className="relative">
+              <button
+                onClick={() => setPlanningMenuOpen(!planningMenuOpen)}
+                className={`flex items-center gap-1.5 h-7 px-3 rounded-lg ring-1 ring-[rgba(255,255,255,0.15)] text-[12px] font-medium transition-all duration-150 cursor-pointer ${
+                  planningMenuOpen || isPlanningView
+                    ? 'bg-[rgba(255,255,255,0.12)] text-white'
+                    : 'bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white'
+                }`}
+              >
+                Planning
+                <svg className={`w-3 h-3 transition-transform duration-150 ${planningMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+              {planningMenuOpen && (
+                <div className="absolute top-full right-0 mt-[10px] z-50 w-48 bg-bg-surface rounded-xl ring-1 ring-[rgba(255,255,255,0.12)] shadow-2xl overflow-hidden animate-[slideDown_100ms_ease-out]">
+                  {([
+                    { mode: 'planning-nieuw' as ViewMode, label: 'Nieuw project' },
+                    { mode: 'planning-lopend' as ViewMode, label: 'Lopende projecten' },
+                    { mode: 'planning-afgerond' as ViewMode, label: 'Afgeronde projecten' },
+                  ]).map((item, i) => (
+                    <div key={item.mode}>
+                      {i > 0 && <div className="border-t border-[rgba(255,255,255,0.06)]" />}
+                      <button
+                        onClick={() => { handleViewMode(item.mode); setPlanningMenuOpen(false); }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-[13px] transition-colors cursor-pointer ${
+                          viewMode === item.mode
+                            ? 'bg-accent/15 text-accent'
+                            : 'text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.08)] hover:text-white'
+                        }`}
+                      >
+                        {viewMode === item.mode && (
+                          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                          </svg>
+                        )}
+                        <span className={viewMode !== item.mode ? 'ml-[26px]' : ''}>{item.label}</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            )}
             <SearchBar value={searchQuery} onChange={setSearchQuery} />
             <div ref={exportRef} className="relative">
               <button
@@ -313,6 +429,7 @@ export default function OrganigramPage() {
                 </div>
               )}
             </div>
+            {isAdmin && (
             <a
               href="/admin"
               className="h-7 w-7 flex items-center justify-center rounded-lg bg-[rgba(255,255,255,0.06)] ring-1 ring-[rgba(255,255,255,0.15)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white transition-all duration-150"
@@ -323,12 +440,44 @@ export default function OrganigramPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
               </svg>
             </a>
+            )}
+            <button
+              onClick={logout}
+              className="h-7 w-7 flex items-center justify-center rounded-lg bg-[rgba(255,255,255,0.06)] ring-1 ring-[rgba(255,255,255,0.15)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white transition-all duration-150"
+              title={`Uitloggen (${username})`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+              </svg>
+            </button>
           </div>
         </div>
       </header>
 
       {/* View content */}
-      {viewMode === 'klantteams' ? (
+      {isPlanningView ? (
+        <div className="mx-auto max-w-5xl px-6 py-8">
+          {editingProjectId !== undefined ? (
+            <ProjectForm
+              projectId={editingProjectId}
+              onBack={() => setEditingProjectId(undefined)}
+              onCreated={(id) => setEditingProjectId(id)}
+            />
+          ) : viewMode === 'planning-nieuw' ? (
+            <ProjectForm
+              onBack={() => handleViewMode('planning-lopend')}
+              onCreated={(id) => setEditingProjectId(id)}
+            />
+          ) : (
+            <ProjectList
+              statusOverride={viewMode === 'planning-afgerond' ? 'completed' : 'active'}
+              onEditProject={(id) => setEditingProjectId(id)}
+              onNewProject={() => handleViewMode('planning-nieuw')}
+              onToggleView={() => handleViewMode(viewMode === 'planning-afgerond' ? 'planning-lopend' : 'planning-afgerond')}
+            />
+          )}
+        </div>
+      ) : viewMode === 'klantteams' ? (
         <KlantteamsView searchQuery={searchQuery} captureRef={klantteamsCaptureRef} />
       ) : (
         <>
