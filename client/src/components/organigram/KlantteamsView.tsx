@@ -108,12 +108,12 @@ export default function KlantteamsView({ searchQuery, captureRef }: KlantteamsVi
                   </div>
                 ))}
               </div>
-              <div className="w-0.5 h-8 bg-accent -mt-[1px]" />
+              <div className="w-0.5 h-8 bg-accent -mt-[1px] -mb-[1px]" />
             </div>
           )}
 
           {/* Horizontal bar + team columns */}
-          <div className="flex relative" style={{ minWidth: `${clientTeams.length * 200}px` }}>
+          <div className="flex relative -mt-[1px]" style={{ minWidth: `${clientTeams.length * 200}px` }}>
             {clientTeams.map((team, i) => (
               <div
                 key={team.id}
