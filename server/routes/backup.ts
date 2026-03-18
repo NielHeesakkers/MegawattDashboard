@@ -45,22 +45,30 @@ interface BackupData {
   clientTeams?: any[];
   clientTeamMembers?: any[];
   clients?: any[];
+  users?: any[];
+  klanten?: any[];
+  projects?: any[];
+  activations?: any[];
 }
 
 // Export: download ZIP with data.json + uploads/
 router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const [executives, teams, members, clientTeams, clientTeamMembers, clients] = await Promise.all([
+    const [executives, teams, members, clientTeams, clientTeamMembers, clients, users, klanten, projects, activations] = await Promise.all([
       prisma.executive.findMany({ orderBy: { level: 'asc' } }),
       prisma.team.findMany({ orderBy: { order: 'asc' } }),
       prisma.member.findMany({ orderBy: [{ teamId: 'asc' }, { order: 'asc' }] }),
       prisma.clientTeam.findMany({ orderBy: { order: 'asc' } }),
       prisma.clientTeamMember.findMany({ orderBy: { order: 'asc' } }),
       prisma.client.findMany({ orderBy: [{ clientTeamId: 'asc' }, { order: 'asc' }] }),
+      prisma.user.findMany({ orderBy: { username: 'asc' } }),
+      prisma.klant.findMany({ orderBy: { name: 'asc' } }),
+      prisma.project.findMany({ orderBy: { id: 'asc' } }),
+      prisma.activation.findMany({ orderBy: { id: 'asc' } }),
     ]);
 
     const backupData: BackupData = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       executives,
       teams,
@@ -68,6 +76,10 @@ router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) =>
       clientTeams,
       clientTeamMembers,
       clients,
+      users,
+      klanten,
+      projects,
+      activations,
     };
 
     const archive = archiver('zip', { zlib: { level: 9 } });
@@ -121,6 +133,9 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
 
     // Replace data in transaction with ID remapping
     await prisma.$transaction(async (tx) => {
+      await tx.activation.deleteMany();
+      await tx.project.deleteMany();
+      await tx.klant.deleteMany();
       await tx.client.deleteMany();
       await tx.clientTeamMember.deleteMany();
       await tx.clientTeam.deleteMany();
@@ -205,6 +220,56 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
           }
         }
       }
+
+      // Import users (replace all except the currently logged-in user)
+      if (backupData.users) {
+        // Keep the current user to avoid locking yourself out
+        const currentUserId = (req as AuthRequest).userId;
+        await tx.user.deleteMany({ where: { id: { not: currentUserId } } });
+        for (const user of backupData.users) {
+          const { id: _oldId, ...data } = user;
+          // Skip if this username already exists (the current user)
+          const exists = await tx.user.findUnique({ where: { username: data.username } });
+          if (exists) continue;
+          await tx.user.create({ data });
+        }
+      }
+
+      // Import klanten with ID remapping
+      const klantIdMap = new Map<number, number>();
+      if (backupData.klanten) {
+        for (const klant of backupData.klanten) {
+          const { id: oldId, projects: _p, _count: _c, ...data } = klant;
+          const created = await tx.klant.create({ data });
+          klantIdMap.set(oldId, created.id);
+        }
+      }
+
+      // Import projects with remapped klantId
+      const projectIdMap = new Map<number, number>();
+      if (backupData.projects) {
+        for (const project of backupData.projects) {
+          const { id: oldId, klant: _k, activations: _a, _count: _c, ...data } = project;
+          const newKlantId = klantIdMap.get(data.klantId);
+          if (!newKlantId) continue;
+          const created = await tx.project.create({
+            data: { ...data, klantId: newKlantId },
+          });
+          projectIdMap.set(oldId, created.id);
+        }
+      }
+
+      // Import activations with remapped projectId
+      if (backupData.activations) {
+        for (const activation of backupData.activations) {
+          const { id: _oldId, ...data } = activation;
+          const newProjectId = projectIdMap.get(data.projectId);
+          if (!newProjectId) continue;
+          await tx.activation.create({
+            data: { ...data, projectId: newProjectId },
+          });
+        }
+      }
     });
 
     // Replace photos
@@ -257,6 +322,9 @@ router.delete('/clear', authMiddleware, async (req: AuthRequest, res: Response) 
     ]);
 
     await prisma.$transaction(async (tx) => {
+      await tx.activation.deleteMany();
+      await tx.project.deleteMany();
+      await tx.klant.deleteMany();
       await tx.client.deleteMany();
       await tx.clientTeamMember.deleteMany();
       await tx.clientTeam.deleteMany();
@@ -290,17 +358,21 @@ router.delete('/clear', authMiddleware, async (req: AuthRequest, res: Response) 
 
 async function createAutoBackup(): Promise<string | null> {
   try {
-    const [executives, teams, members, clientTeams, clientTeamMembers, clients] = await Promise.all([
+    const [executives, teams, members, clientTeams, clientTeamMembers, clients, users, klanten, projects, activations] = await Promise.all([
       prisma.executive.findMany({ orderBy: { level: 'asc' } }),
       prisma.team.findMany({ orderBy: { order: 'asc' } }),
       prisma.member.findMany({ orderBy: [{ teamId: 'asc' }, { order: 'asc' }] }),
       prisma.clientTeam.findMany({ orderBy: { order: 'asc' } }),
       prisma.clientTeamMember.findMany({ orderBy: { order: 'asc' } }),
       prisma.client.findMany({ orderBy: [{ clientTeamId: 'asc' }, { order: 'asc' }] }),
+      prisma.user.findMany({ orderBy: { username: 'asc' } }),
+      prisma.klant.findMany({ orderBy: { name: 'asc' } }),
+      prisma.project.findMany({ orderBy: { id: 'asc' } }),
+      prisma.activation.findMany({ orderBy: { id: 'asc' } }),
     ]);
 
     const backupData: BackupData = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       executives,
       teams,
@@ -308,6 +380,10 @@ async function createAutoBackup(): Promise<string | null> {
       clientTeams,
       clientTeamMembers,
       clients,
+      users,
+      klanten,
+      projects,
+      activations,
     };
 
     const date = new Date();
