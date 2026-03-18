@@ -431,7 +431,7 @@ function UsersTab() {
   const toast = useToast();
   const { username: currentUsername } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [editingUser, setEditingUser] = useState<{ id?: number; username: string; password: string } | null>(null);
+  const [editingUser, setEditingUser] = useState<{ id?: number; username: string; password: string; role: string; allowedTabs: string[] } | null>(null);
   const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -450,12 +450,21 @@ function UsersTab() {
     setError('');
     try {
       if (editingUser.id) {
-        const data: { username?: string; password?: string } = { username: editingUser.username };
+        const data: { username?: string; password?: string; role?: string; allowedTabs?: string[] } = {
+          username: editingUser.username,
+          role: editingUser.role,
+          allowedTabs: editingUser.role === 'admin' ? ['intern', 'planning'] : editingUser.allowedTabs,
+        };
         if (editingUser.password) data.password = editingUser.password;
         await updateAdminUser(editingUser.id, data);
         toast.success('Gebruiker bijgewerkt');
       } else {
-        await createAdminUser({ username: editingUser.username, password: editingUser.password });
+        await createAdminUser({
+          username: editingUser.username,
+          password: editingUser.password,
+          role: editingUser.role,
+          allowedTabs: editingUser.role === 'admin' ? ['intern', 'planning'] : editingUser.allowedTabs,
+        });
         toast.success('Gebruiker aangemaakt');
       }
       setEditingUser(null);
@@ -487,7 +496,7 @@ function UsersTab() {
     <>
       <div className="flex items-center justify-between mb-4">
         <button
-          onClick={() => { setEditingUser({ username: '', password: '' }); setIsCreating(true); setError(''); }}
+          onClick={() => { setEditingUser({ username: '', password: '', role: 'user', allowedTabs: [] }); setIsCreating(true); setError(''); }}
           className="flex items-center gap-2 px-4 py-2 rounded-[8px] bg-accent text-bg-dark text-sm font-semibold hover:opacity-85 transition-opacity cursor-pointer"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
@@ -503,13 +512,19 @@ function UsersTab() {
         {users.map((user) => (
           <div
             key={user.id}
-            onClick={() => { setEditingUser({ id: user.id, username: user.username, password: '' }); setIsCreating(false); setError(''); }}
+            onClick={() => { setEditingUser({ id: user.id, username: user.username, password: '', role: user.role, allowedTabs: user.allowedTabs }); setIsCreating(false); setError(''); }}
             className="flex items-center gap-3 bg-bg-card p-3 rounded-lg hover:bg-white/5 cursor-pointer"
           >
             <div className="w-8 h-8 rounded-full bg-accent-teal/20 flex items-center justify-center text-accent-teal text-sm font-bold flex-shrink-0">
               {user.username.charAt(0).toUpperCase()}
             </div>
             <span className="flex-1 text-text-primary font-medium">{user.username}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${user.role === 'admin' ? 'bg-accent/20 text-accent' : 'bg-white/10 text-text-secondary'}`}>
+              {user.role === 'admin' ? 'Admin' : 'Gebruiker'}
+            </span>
+            {user.allowedTabs && user.role !== 'admin' && (
+              <span className="text-xs text-text-muted">{user.allowedTabs.join(', ')}</span>
+            )}
             {user.username === currentUsername && (
               <span className="text-accent-teal text-xs bg-accent-teal/10 px-2 py-0.5 rounded-full">Jij</span>
             )}
@@ -541,6 +556,46 @@ function UsersTab() {
               <label className="block text-text-secondary text-sm mb-1">{isCreating ? 'Wachtwoord' : 'Nieuw wachtwoord (laat leeg om niet te wijzigen)'}</label>
               <input type="password" value={editingUser.password} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} className={inputClass} placeholder={isCreating ? '' : 'Ongewijzigd'} />
               {editingUser.password && <PasswordStrength password={editingUser.password} />}
+            </div>
+            <div>
+              <label className="block text-text-secondary text-sm mb-1">Rol</label>
+              <select
+                value={editingUser.role}
+                onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
+                className={inputClass}
+              >
+                <option value="user">Gebruiker</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-text-secondary text-sm mb-2">Zichtbare tabs</label>
+              <div className="flex gap-4">
+                {[
+                  { key: 'intern', label: 'Intern' },
+                  { key: 'planning', label: 'Planning' },
+                ].map((tab) => (
+                  <label key={tab.key} className={`flex items-center gap-2 text-sm ${editingUser.role === 'admin' ? 'opacity-50' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={editingUser.role === 'admin' || editingUser.allowedTabs.includes(tab.key)}
+                      disabled={editingUser.role === 'admin'}
+                      onChange={(e) => {
+                        if (editingUser.role === 'admin') return;
+                        const tabs = e.target.checked
+                          ? [...editingUser.allowedTabs, tab.key]
+                          : editingUser.allowedTabs.filter(t => t !== tab.key);
+                        setEditingUser({ ...editingUser, allowedTabs: tabs });
+                      }}
+                      className="accent-accent-teal"
+                    />
+                    <span className="text-text-primary">{tab.label}</span>
+                  </label>
+                ))}
+              </div>
+              {editingUser.role === 'admin' && (
+                <p className="text-text-muted text-xs mt-1">Admins hebben automatisch toegang tot alle tabs</p>
+              )}
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button onClick={() => { setEditingUser(null); setIsCreating(false); setError(''); }} className="px-4 py-2 rounded-lg bg-white/10 text-text-primary cursor-pointer">Annuleren</button>
