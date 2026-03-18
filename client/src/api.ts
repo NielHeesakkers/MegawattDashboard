@@ -20,7 +20,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && localStorage.getItem('token')) {
       localStorage.removeItem('token');
       localStorage.removeItem('username');
-      window.location.href = '/admin';
+      localStorage.removeItem('role');
+      localStorage.removeItem('allowedTabs');
+      window.location.href = '/';
     }
     return Promise.reject(error);
   }
@@ -65,6 +67,8 @@ export interface Executive {
 export interface AdminUser {
   id: number;
   username: string;
+  role: string;
+  allowedTabs: string[];
 }
 
 export interface AuditLogEntry {
@@ -83,7 +87,7 @@ export const fetchExecutives = () => api.get<Executive[]>('/executives').then((r
 export const fetchMembers = () => api.get<Member[]>('/members').then((r) => r.data);
 
 export const login = (username: string, password: string) =>
-  api.post<{ token: string; username: string }>('/auth/login', { username, password }).then((r) => r.data);
+  api.post<{ token: string; username: string; role: string; allowedTabs: string[] }>('/auth/login', { username, password }).then((r) => r.data);
 
 // Admin CRUD
 export const createTeam = (data: Partial<Team>) => api.post<Team>('/teams', data).then((r) => r.data);
@@ -103,9 +107,9 @@ export const updateExecutive = (id: number, data: FormData) => api.put<Executive
 export const deleteExecutive = (id: number) => api.delete(`/executives/${id}`);
 
 export const fetchAdminUsers = () => api.get<AdminUser[]>('/auth/users').then((r) => r.data);
-export const createAdminUser = (data: { username: string; password: string }) =>
+export const createAdminUser = (data: { username: string; password: string; role: string; allowedTabs: string[] }) =>
   api.post<AdminUser>('/auth/users', data).then((r) => r.data);
-export const updateAdminUser = (id: number, data: { username?: string; password?: string }) =>
+export const updateAdminUser = (id: number, data: { username?: string; password?: string; role?: string; allowedTabs?: string[] }) =>
   api.put<AdminUser>(`/auth/users/${id}`, data).then((r) => r.data);
 export const deleteAdminUser = (id: number) => api.delete(`/auth/users/${id}`);
 
