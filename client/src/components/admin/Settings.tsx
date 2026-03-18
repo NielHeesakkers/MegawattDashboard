@@ -426,6 +426,13 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
+const AVAILABLE_TABS = [
+  { key: 'intern', label: 'Intern' },
+  { key: 'planning', label: 'Planning' },
+] as const;
+
+const ALL_TAB_KEYS = AVAILABLE_TABS.map(t => t.key);
+
 // ---- Users tab ----
 function UsersTab() {
   const toast = useToast();
@@ -453,7 +460,7 @@ function UsersTab() {
         const data: { username?: string; password?: string; role?: string; allowedTabs?: string[] } = {
           username: editingUser.username,
           role: editingUser.role,
-          allowedTabs: editingUser.role === 'admin' ? ['intern', 'planning'] : editingUser.allowedTabs,
+          allowedTabs: editingUser.role === 'admin' ? [...ALL_TAB_KEYS] : editingUser.allowedTabs,
         };
         if (editingUser.password) data.password = editingUser.password;
         await updateAdminUser(editingUser.id, data);
@@ -463,7 +470,7 @@ function UsersTab() {
           username: editingUser.username,
           password: editingUser.password,
           role: editingUser.role,
-          allowedTabs: editingUser.role === 'admin' ? ['intern', 'planning'] : editingUser.allowedTabs,
+          allowedTabs: editingUser.role === 'admin' ? [...ALL_TAB_KEYS] : editingUser.allowedTabs,
         });
         toast.success('Gebruiker aangemaakt');
       }
@@ -571,10 +578,7 @@ function UsersTab() {
             <div>
               <label className="block text-text-secondary text-sm mb-2">Zichtbare tabs</label>
               <div className="flex gap-4">
-                {[
-                  { key: 'intern', label: 'Intern' },
-                  { key: 'planning', label: 'Planning' },
-                ].map((tab) => (
+                {AVAILABLE_TABS.map((tab) => (
                   <label key={tab.key} className={`flex items-center gap-2 text-sm ${editingUser.role === 'admin' ? 'opacity-50' : ''}`}>
                     <input
                       type="checkbox"
@@ -582,10 +586,10 @@ function UsersTab() {
                       disabled={editingUser.role === 'admin'}
                       onChange={(e) => {
                         if (editingUser.role === 'admin') return;
-                        const tabs = e.target.checked
+                        const newAllowedTabs = e.target.checked
                           ? [...editingUser.allowedTabs, tab.key]
                           : editingUser.allowedTabs.filter(t => t !== tab.key);
-                        setEditingUser({ ...editingUser, allowedTabs: tabs });
+                        setEditingUser({ ...editingUser, allowedTabs: newAllowedTabs });
                       }}
                       className="accent-accent-teal"
                     />
