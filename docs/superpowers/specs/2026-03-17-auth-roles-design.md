@@ -8,7 +8,7 @@ Add site-wide authentication and role-based tab visibility to the MegawattDashbo
 
 1. **Site-wide login**: navigating to `/` shows a login screen if not authenticated
 2. **Two roles**: `admin` (full access including Settings + admin panel) and `user` (frontend tabs only)
-3. **Per-user tab visibility**: each user has a configurable list of allowed tabs (e.g. `["intern","planning"]`). Tab visibility = full edit permission for that tab's content
+3. **Per-user tab visibility**: each user has a configurable list of allowed tabs (e.g. `["intern","planning"]`). Tab visibility controls what users can see and interact with on the frontend. Server-side tab enforcement is not needed for v1 — this is a small internal tool with trusted users. All authenticated API routes are accessible to any logged-in user; the frontend controls which sections are visible.
 4. **Future-proof**: new tabs can be added later without schema changes — just a new string in the allowedTabs array
 5. **User management**: admins create/edit/delete users in the existing Settings page
 
@@ -26,11 +26,23 @@ model User {
 }
 ```
 
-**Migration strategy:**
-- Prisma migration renames `Admin` table to `User`
-- Adds `role` column with default `"user"`
-- Adds `allowedTabs` column with default `"[]"`
-- Post-migration SQL sets all existing accounts to `role = "admin"` and `allowedTabs = '["intern","planning"]'`
+**Migration strategy — custom SQL migration (SQLite-safe):**
+
+Prisma's auto-generated migrations can drop-and-recreate tables on rename, risking data loss. Instead, use a custom migration with raw SQL:
+
+```sql
+-- Step 1: Rename table
+ALTER TABLE Admin RENAME TO User;
+
+-- Step 2: Add new columns with defaults
+ALTER TABLE User ADD COLUMN role TEXT NOT NULL DEFAULT 'user';
+ALTER TABLE User ADD COLUMN allowedTabs TEXT NOT NULL DEFAULT '[]';
+
+-- Step 3: Set all existing accounts to admin with all tabs
+UPDATE User SET role = 'admin', allowedTabs = '["intern","planning"]';
+```
+
+The Prisma migration file is created with `prisma migrate dev --create-only`, then the auto-generated SQL is replaced with the custom SQL above. After applying, run `prisma generate` to update the client.
 
 **Tab registry** (defined as constant, not in DB):
 ```typescript
@@ -44,6 +56,10 @@ New tabs are added by extending this array. No schema change needed.
 
 ## Server Changes
 
+### Protect all public GET routes
+
+Currently many GET routes are public (no auth required): teams, executives, members, client-teams, clients, projects, klanten. Since the entire site now requires login, **add `authMiddleware` to all GET routes** that currently lack it. This ensures API data is not accessible without a valid JWT.
+
 ### Auth routes (`server/routes/auth.ts`)
 
 **Login response** — include role and allowedTabs:
@@ -52,22 +68,22 @@ New tabs are added by extending this array. No schema change needed.
 { token, username, role, allowedTabs: ["intern","planning"] }
 ```
 
-The JWT payload includes: `{ id, username, role, allowedTabs }`.
+The JWT payload includes: `{ id, username, role }`. Note: `allowedTabs` is NOT in the JWT — it is returned in the login response and stored client-side, but the server reads it from the database when needed. This avoids JWT staleness when an admin changes a user's tab permissions (the change takes effect on next page refresh or API call, not requiring re-login).
 
 **User CRUD** — update existing admin management endpoints:
 - `GET /api/auth/users` — returns all users (id, username, role, allowedTabs). Protected, admin-only.
 - `POST /api/auth/users` — create user with `{ username, password, role, allowedTabs }`. Protected, admin-only.
-- `PUT /api/auth/users/:id` — update user. Protected, admin-only.
-- `DELETE /api/auth/users/:id` — delete user. Protected, admin-only. Prevent deleting last admin.
+- `PUT /api/auth/users/:id` — update user. Protected, admin-only. **Demotion check**: if changing role from admin to user, verify at least one other admin remains (count where `role = 'admin' AND id != targetId`).
+- `DELETE /api/auth/users/:id` — delete user. Protected, admin-only. **Last admin check**: count users where `role = 'admin' AND id != targetId` must be >= 1.
 
 **Validation:**
 - `role` must be `"admin"` or `"user"`
-- `allowedTabs` must be a valid JSON array of known tab keys
-- Admin role automatically gets all tabs (enforced server-side)
+- `allowedTabs` must be a valid JSON array of known tab keys (validated against `AVAILABLE_TABS`)
+- Admin role automatically gets all tabs (enforced server-side on create/update: if role=admin, set allowedTabs to all tabs)
 
 ### Auth middleware (`server/middleware/auth.ts`)
 
-Update to read from `User` table instead of `Admin`. Add `req.userRole` and `req.allowedTabs` to the request object.
+Update to read from `User` table instead of `Admin`. The middleware verifies the JWT, looks up the user in the DB, and attaches `req.userId`, `req.username`, and `req.userRole` to the request object.
 
 **New middleware: `adminOnly`** — used on admin-specific routes (Settings, user management):
 ```typescript
@@ -82,7 +98,8 @@ function adminOnly(req, res, next) {
 - Replace `Admin` references with `User` in Prisma queries
 - Rename `req.adminId` → `req.userId`, `req.adminUsername` → `req.username`
 - Add `adminOnly` middleware to Settings and user management routes
-- All other authenticated routes remain accessible to both roles (the frontend controls what users see via tab visibility)
+- Add `authMiddleware` to all currently-public GET routes
+- All authenticated routes are accessible to both roles (frontend controls tab visibility)
 
 ## Client Changes
 
@@ -104,6 +121,16 @@ hasTab(tab: string): boolean; // allowedTabs.includes(tab)
 
 Login stores `role` and `allowedTabs` in localStorage alongside token and username. On mount, these are restored from localStorage.
 
+**Logout** must clear all stored fields: `token`, `username`, `role`, `allowedTabs`.
+
+### API client — 401 interceptor fix (`client/src/api.ts`)
+
+The current 401 interceptor redirects to `/admin`. Update to redirect to `/` instead, since that's now the login page for all users:
+```typescript
+// On 401: clear localStorage and redirect to /
+window.location.href = '/';
+```
+
 ### Login on root page (`/`)
 
 **OrganigramPage** gets wrapped in an auth check:
@@ -124,14 +151,16 @@ The Intern and Planning dropdown buttons in the header are conditionally rendere
 - If user only has `["planning"]`, they see only the Planning button
 - If user has `["intern","planning"]`, they see both
 - The admin gear icon is only shown when `isAdmin`
+- A logout button is shown for all users (replaces or sits next to the gear icon)
 
-**Default view on login**: if the user's first allowed tab is "intern", show the dashboard (organigram). If it's "planning", show planning-lopend. This prevents showing a blank page.
+**Default view on login**: validate the persisted `viewMode` from localStorage against `allowedTabs`. If the stored viewMode references a tab the user doesn't have access to, reset to the first allowed tab's default view (intern→dashboard, planning→planning-lopend). This prevents showing a blank page after permission changes.
 
 ### Admin panel access
 
-- The `/admin` route remains as-is with AdminLayout
+- The entire `/admin` route is restricted to admin role only
 - AdminLayout checks: if `!isAdmin`, redirect to `/` (they shouldn't be here)
 - The gear icon in OrganigramPage header is only visible to admins
+- Non-admin users have no way to reach `/admin` through the UI
 
 ### Settings — User management UI
 
@@ -153,25 +182,31 @@ Extend the existing "Beheerders" section:
 
 ### API client (`client/src/api.ts`)
 
-Update the `login()` function to return and store `role` and `allowedTabs`. Update user management API functions to include role and allowedTabs in create/update payloads.
+Update the `login()` function to return and store `role` and `allowedTabs`. Update user management API functions to include role and allowedTabs in create/update payloads. Update the `AdminUser` interface to include `role` and `allowedTabs` fields.
 
 ## Migration Plan
 
-1. Prisma migration: rename Admin → User, add role + allowedTabs columns
-2. Seed migration: set existing accounts to admin role with all tabs
-3. Update server auth routes and middleware
-4. Update all server routes (Admin → User references)
-5. Extract LoginForm to shared component
-6. Update AuthContext with role + allowedTabs
-7. Add auth gate to OrganigramPage
-8. Filter header tabs based on allowedTabs
-9. Update Settings UI for user management with roles + tabs
-10. Restrict /admin to admin role only
+1. Prisma migration: custom SQL to rename Admin → User, add role + allowedTabs columns, set existing accounts to admin
+2. Update server auth middleware (User table, req.userId/username/userRole)
+3. Update server auth routes (login response, user CRUD with role/tabs)
+4. Add authMiddleware to all public GET routes
+5. Update all server routes (Admin → User references, req.adminId → req.userId)
+6. Extract LoginForm to shared component
+7. Update AuthContext with role + allowedTabs + logout cleanup
+8. Fix 401 interceptor to redirect to `/`
+9. Add auth gate to OrganigramPage
+10. Filter header tabs based on allowedTabs + add logout button
+11. Update Settings UI for user management with roles + tabs
+12. Restrict /admin to admin role only
 
 ## Edge Cases
 
-- **Last admin protection**: cannot delete or demote the last admin account
+- **Last admin protection**: cannot delete or demote the last admin account. Check is `count(role='admin' AND id != target) >= 1`.
 - **Token expiry**: existing tokens (without role) will fail validation → user is logged out and must re-login (acceptable for a one-time migration)
-- **Admin tab override**: admin role always gets all tabs server-side, regardless of what's in allowedTabs
-- **No tabs assigned**: if a user has no allowed tabs, they see a message like "Geen toegang tot secties. Neem contact op met een beheerder."
+- **Admin tab override**: admin role always gets all tabs server-side, regardless of what's stored in allowedTabs
+- **No tabs assigned**: if a user has no allowed tabs, they see a message: "Geen toegang tot secties. Neem contact op met een beheerder."
 - **localStorage stale data**: on login, always overwrite stored role/tabs with server response
+- **Stale viewMode**: on login, validate persisted viewMode against allowedTabs; reset if the tab is not available
+- **401 redirect**: interceptor redirects to `/` (not `/admin`) and clears all auth data from localStorage
+- **Tab permission changes**: since allowedTabs is not in the JWT, changes take effect on next page refresh when the frontend re-reads from the server (via a lightweight check or on next API call)
+- **Server-side tab enforcement**: explicitly not implemented in v1 — this is a trusted internal tool. All authenticated users can call any API endpoint. The frontend controls visibility.
