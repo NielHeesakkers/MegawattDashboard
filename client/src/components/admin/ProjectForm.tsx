@@ -18,10 +18,17 @@ const toDateInput = (d: string | null | undefined) => {
   return `${y}-${m}-${day}`;
 };
 
-export default function ProjectForm() {
-  const { id } = useParams();
+interface ProjectFormProps {
+  projectId?: number;
+  onBack?: () => void;
+  onCreated?: (id: number) => void;
+}
+
+export default function ProjectForm({ projectId, onBack, onCreated }: ProjectFormProps = {}) {
+  const params = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const id = projectId !== undefined ? String(projectId) : params.id;
   const isEdit = Boolean(id);
 
   const [klanten, setKlanten] = useState<Klant[]>([]);
@@ -32,7 +39,7 @@ export default function ProjectForm() {
     endDate: '',
     contactPerson: '',
     email: '',
-    status: 'active',
+    status: 'active' as 'active' | 'completed',
   });
   const [activations, setActivations] = useState<Activation[]>([]);
   const [activeTab, setActiveTab] = useState(0);
@@ -96,7 +103,11 @@ export default function ProjectForm() {
       } else {
         const project = await createProject(form);
         toast.success('Project aangemaakt');
-        navigate(`/admin/projects/${project.id}`);
+        if (onCreated) {
+          onCreated(project.id);
+        } else {
+          navigate(`/admin/projects/${project.id}`);
+        }
       }
     } catch {
       toast.error('Project opslaan mislukt');
@@ -155,7 +166,7 @@ export default function ProjectForm() {
           {isEdit ? `Project ${form.projectNumber}` : 'Nieuw project'}
         </h1>
         <button
-          onClick={() => navigate('/admin/projects')}
+          onClick={() => onBack ? onBack() : navigate('/admin/projects')}
           className="px-4 py-2 rounded-[6px] text-text-secondary hover:text-text-primary border border-[rgba(255,255,255,0.12)] transition-colors cursor-pointer"
         >
           Terug
@@ -233,7 +244,7 @@ export default function ProjectForm() {
               <label className="block text-text-secondary text-sm mb-1">Status</label>
               <select
                 value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
+                onChange={(e) => setForm({ ...form, status: e.target.value as 'active' | 'completed' })}
                 className="w-full px-3 py-2 rounded-[8px] bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.12)] text-white text-[14px]"
               >
                 <option value="active">Actief</option>

@@ -91,14 +91,14 @@ async function main() {
   await prisma.member.deleteMany();
   await prisma.team.deleteMany();
   await prisma.executive.deleteMany();
-  await prisma.admin.deleteMany();
+  await prisma.user.deleteMany();
 
   // Create admin user (from env vars or defaults)
   const adminUser = process.env.ADMIN_USERNAME || 'admin';
   const adminPass = process.env.ADMIN_PASSWORD || 'megawatt2026';
   const passwordHash = await bcrypt.hash(adminPass, 10);
-  await prisma.admin.create({
-    data: { username: adminUser, passwordHash },
+  await prisma.user.create({
+    data: { username: adminUser, passwordHash, role: 'admin', allowedTabs: '["intern","planning"]' },
   });
   console.log(`Admin user created: ${adminUser}`);
 

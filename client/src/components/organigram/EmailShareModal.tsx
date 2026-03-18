@@ -14,7 +14,7 @@ interface EmailShareModalProps {
   isOpen: boolean;
   onClose: () => void;
   generatePdfBase64: () => Promise<string | null>;
-  viewMode: 'dashboard' | 'klantteams';
+  viewMode: string;
   contacts: Contact[];
 }
 
