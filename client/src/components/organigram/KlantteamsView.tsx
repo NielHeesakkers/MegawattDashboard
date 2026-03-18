@@ -108,7 +108,7 @@ export default function KlantteamsView({ searchQuery, captureRef }: KlantteamsVi
                   </div>
                 ))}
               </div>
-              <div className="w-0.5 h-8 bg-accent" />
+              <div className="w-0.5 h-8 bg-accent -mt-[1px]" />
             </div>
           )}
 
@@ -128,7 +128,7 @@ export default function KlantteamsView({ searchQuery, captureRef }: KlantteamsVi
                   }}
                 />
                 {/* Vertical connector */}
-                <div className="w-0.5 h-8 bg-accent" />
+                <div className="w-0.5 h-8 bg-accent -mt-[1px]" />
                 {/* Team column */}
                 <div className="w-full px-2">
                   <ClientTeamColumn
