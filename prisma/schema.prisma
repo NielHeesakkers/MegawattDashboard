@@ -91,10 +91,12 @@ model AuditLog {
   createdAt   DateTime @default(now())
 }
 
-model Admin {
+model User {
   id           Int    @id @default(autoincrement())
   username     String @unique
   passwordHash String
+  role         String @default("user")
+  allowedTabs  String @default("[]")
 }
 
 model Setting {
