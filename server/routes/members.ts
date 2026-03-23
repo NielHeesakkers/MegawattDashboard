@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
-import { upload, processPhoto, deletePhoto } from '../middleware/upload';
+import { upload, processPhotoTo, deletePhoto } from '../middleware/upload';
 import { logAudit } from '../lib/audit';
 
 const router = Router();
@@ -31,17 +31,18 @@ router.post(
   '/',
   authMiddleware,
   upload.single('photo'),
-  processPhoto,
+  processPhotoTo('Medewerker'),
   async (req: AuthRequest, res: Response) => {
     const { name, role, email, phone, photo, teamId, isVacancy, isTeamLead, order, subGroup } = req.body;
     const isVac = isVacancy === 'true' || isVacancy === true;
     const isLead = isTeamLead === 'true' || isTeamLead === true;
 
     // Auto-calculate order: vacancies at bottom, team leads above vacancies
+    const parsedTeamId = teamId && teamId !== 'null' && teamId !== '' ? Number(teamId) : null;
     let finalOrder = Number(order) || 0;
-    if (!order || Number(order) === 0) {
+    if (parsedTeamId && (!order || Number(order) === 0)) {
       const teamMembers = await prisma.member.findMany({
-        where: { teamId: Number(teamId) },
+        where: { teamId: parsedTeamId },
         orderBy: { order: 'asc' },
       });
       if (isVac) {
@@ -80,7 +81,7 @@ router.post(
         email: email || null,
         phone: phone || null,
         photo: photo || null,
-        teamId: Number(teamId),
+        teamId: parsedTeamId,
         isVacancy: isVac,
         isTeamLead: isLead,
         order: finalOrder,
@@ -98,7 +99,7 @@ router.put(
   '/:id',
   authMiddleware,
   upload.single('photo'),
-  processPhoto,
+  processPhotoTo('Medewerker'),
   async (req: AuthRequest, res: Response) => {
     const id = Number(req.params.id);
     const existing = await prisma.member.findUnique({ where: { id } });
@@ -121,7 +122,7 @@ router.put(
         email: email !== undefined ? (email || null) : existing.email,
         phone: phone !== undefined ? (phone || null) : existing.phone,
         photo: resolvedPhoto,
-        teamId: teamId ? Number(teamId) : existing.teamId,
+        teamId: teamId !== undefined ? (teamId && teamId !== 'null' && teamId !== '' ? Number(teamId) : null) : existing.teamId,
         isVacancy: isVacancy !== undefined ? (isVacancy === 'true' || isVacancy === true) : existing.isVacancy,
         isTeamLead: isTeamLead !== undefined ? (isTeamLead === 'true' || isTeamLead === true) : existing.isTeamLead,
         order: order !== undefined ? Number(order) : existing.order,

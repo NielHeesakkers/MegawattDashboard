@@ -31,6 +31,32 @@ export const upload = multer({
   },
 });
 
+/** Factory: returns processPhoto middleware that saves into uploads/<subDir>/ */
+export function processPhotoTo(subDir: string) {
+  return async function (req: Request, _res: Response, next: NextFunction) {
+    if (!req.file) return next();
+
+    const targetDir = path.join(uploadsDir, subDir);
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+    const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`;
+    const outputPath = path.join(targetDir, filename);
+    const tmpInput = path.join(uploadsDir, `tmp-${filename}`);
+
+    try {
+      fs.writeFileSync(tmpInput, req.file.buffer);
+      await faceCrop(tmpInput, outputPath, 200, 0.55);
+      req.body.photo = `/uploads/${subDir}/${filename}`;
+      next();
+    } catch (err) {
+      next(err);
+    } finally {
+      if (fs.existsSync(tmpInput)) fs.unlinkSync(tmpInput);
+    }
+  };
+}
+
+/** Backward-compatible: saves into uploads root */
 export async function processPhoto(req: Request, _res: Response, next: NextFunction) {
   if (!req.file) return next();
 
@@ -39,25 +65,27 @@ export async function processPhoto(req: Request, _res: Response, next: NextFunct
   const tmpInput = path.join(uploadsDir, `tmp-${filename}`);
 
   try {
-    // Write buffer to temp file for face-crop
     fs.writeFileSync(tmpInput, req.file.buffer);
-
-    await faceCrop(tmpInput, outputPath, 200, 0.4);
-
+    await faceCrop(tmpInput, outputPath, 200, 0.55);
     req.body.photo = `/uploads/${filename}`;
     next();
   } catch (err) {
     next(err);
   } finally {
-    // Clean up temp file
     if (fs.existsSync(tmpInput)) fs.unlinkSync(tmpInput);
   }
 }
 
 export function deletePhoto(photoPath: string | null | undefined) {
   if (!photoPath) return;
-  const fullPath = path.join(uploadsDir, path.basename(photoPath));
+  // Handle both /uploads/SubDir/file.jpg and legacy /uploads/file.jpg
+  const relative = photoPath.startsWith('/uploads/')
+    ? photoPath.substring('/uploads/'.length)
+    : path.basename(photoPath);
+  const fullPath = path.join(uploadsDir, relative);
   if (fs.existsSync(fullPath)) {
     fs.unlinkSync(fullPath);
   }
 }
+
+export { uploadsDir };

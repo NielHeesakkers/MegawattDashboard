@@ -19,7 +19,10 @@ export default function KlantteamsView({ searchQuery, captureRef }: KlantteamsVi
   const [loading, setLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const execRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const [connLine, setConnLine] = useState<{ left: number; width: number; top: number } | null>(null);
+  const [connLine, setConnLine] = useState<{
+    left: number; width: number; top: number;
+    vertHeight: number;
+  } | null>(null);
 
   useEffect(() => {
     Promise.all([fetchClientTeams(), fetchExecutives()])
@@ -43,11 +46,13 @@ export default function KlantteamsView({ searchQuery, captureRef }: KlantteamsVi
       if (!firstRef || !lastRef) return;
       const first = firstRef.getBoundingClientRect();
       const last = lastRef.getBoundingClientRect();
-      setConnLine({
-        left: first.right - container.left + 4,
-        width: last.left - first.right - 8,
-        top: first.top + first.height / 2 - container.top,
-      });
+      const top = first.top + first.height / 2 - container.top;
+      const left = first.right - container.left + 4;
+      const width = last.left - first.right - 8;
+      // Vertical line height: from connLine down to team bar
+      const execBottom = Math.max(first.bottom, last.bottom) - container.top;
+      const vertHeight = execBottom - top + 32 + 2; // +32 spacer, +2 overlap
+      setConnLine({ left, width, top, vertHeight });
     };
     requestAnimationFrame(() => requestAnimationFrame(measure));
     window.addEventListener('resize', measure);
@@ -80,65 +85,77 @@ export default function KlantteamsView({ searchQuery, captureRef }: KlantteamsVi
   return (
     <>
       <div ref={captureRef} id="organigram-capture" className="mx-auto px-6 py-8 overflow-x-auto">
-        <div ref={containerRef} className="relative">
-          {/* Connecting line between executives (positioned relative to containerRef) */}
+        <div ref={containerRef} className="relative" style={{ minWidth: `${clientTeams.length * 200}px` }}>
+          {/* Connecting lines between executives (positioned relative to containerRef) */}
           {connLine && (
-            <div
-              className="absolute h-0.5 bg-accent z-10"
-              style={{ left: connLine.left, width: connLine.width, top: connLine.top }}
-            />
+            <>
+              {/* Vertical line from connLine down to team bar — at 50% to align with middle team */}
+              <div
+                className="absolute w-0.5 bg-accent -translate-x-1/2"
+                style={{ left: '50%', top: connLine.top, height: connLine.vertHeight }}
+              />
+              {/* Horizontal line between executives */}
+              <div
+                className="absolute h-0.5 bg-accent"
+                style={{ left: connLine.left, width: connLine.width, top: connLine.top }}
+              />
+            </>
           )}
-          {/* Executives row */}
-          {assignedExecs.length > 0 && (
-            <div className="flex flex-col items-center mb-0">
-              <div className="flex justify-center gap-16">
-                {assignedExecs.map((exec) => (
-                  <div
-                    key={exec.id}
-                    ref={(el) => { if (el) execRefs.current.set(exec.id, el); }}
-                    className="flex flex-col items-center"
-                  >
-                    <ExecutiveCard
-                      exec={exec}
-                      isHighlighted={hasSearch && matchesSearch(exec, searchQuery)}
-                      isDimmed={hasSearch && !matchesSearch(exec, searchQuery)}
-                      onClick={setSelectedExec}
-                      hasAccent={0.09}
-                    />
+          {/* Single flex-col parent: exec cards, vertical line, and team columns are all siblings */}
+          <div className="flex flex-col items-center">
+            {/* Executives row */}
+            {assignedExecs.length > 0 && (
+              <div className="flex gap-16">
+                {assignedExecs.map((exec, idx) => (
+                  <div key={exec.id} className={`flex-1 flex ${idx === 0 ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      ref={(el) => { if (el) execRefs.current.set(exec.id, el); }}
+                      className="flex flex-col items-center"
+                    >
+                      <ExecutiveCard
+                        exec={exec}
+                        isHighlighted={hasSearch && matchesSearch(exec, searchQuery)}
+                        isDimmed={hasSearch && !matchesSearch(exec, searchQuery)}
+                        onClick={setSelectedExec}
+                        hasAccent={0.09}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
-              <div className="w-0.5 h-8 bg-accent -mt-[1px] -mb-[1px]" />
-            </div>
-          )}
-
-          {/* Horizontal bar + team columns */}
-          <div className="flex relative -mt-[1px]" style={{ minWidth: `${clientTeams.length * 200}px` }}>
-            {clientTeams.map((team, i) => (
-              <div
-                key={team.id}
-                className="flex-1 flex flex-col items-center relative"
-              >
-                {/* Horizontal bar */}
+            )}
+            {/* Spacer between exec cards and team bar (visual line is absolute) */}
+            {assignedExecs.length > 0 && (
+              <div className="h-8" />
+            )}
+            {/* Horizontal bar + team columns */}
+            <div className="flex relative w-full">
+              {clientTeams.map((team, i) => (
                 <div
-                  className="absolute top-0 h-0.5 bg-accent"
-                  style={{
-                    left: i === 0 ? '50%' : 0,
-                    right: i === clientTeams.length - 1 ? '50%' : 0,
-                  }}
-                />
-                {/* Vertical connector */}
-                <div className="w-0.5 h-8 bg-accent -mt-[1px]" />
-                {/* Team column */}
-                <div className="w-full px-2">
-                  <ClientTeamColumn
-                    team={team}
-                    searchQuery={searchQuery}
-                    onMemberClick={(m) => setSelectedMember(m)}
+                  key={team.id}
+                  className="flex-1 flex flex-col items-center relative"
+                >
+                  {/* Horizontal bar */}
+                  <div
+                    className="absolute top-0 h-0.5 bg-accent"
+                    style={{
+                      left: i === 0 ? '50%' : 0,
+                      right: i === clientTeams.length - 1 ? '50%' : 0,
+                    }}
                   />
+                  {/* Vertical connector to team */}
+                  <div className="w-0.5 h-8 bg-accent" />
+                  {/* Team column */}
+                  <div className="w-full px-2">
+                    <ClientTeamColumn
+                      team={team}
+                      searchQuery={searchQuery}
+                      onMemberClick={(m) => setSelectedMember(m)}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>

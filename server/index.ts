@@ -25,6 +25,7 @@ import settingsRoutes from './routes/settings';
 import shareEmailRoutes from './routes/share-email';
 import klantenRoutes from './routes/klanten';
 import projectRoutes from './routes/projects';
+import superchargerRoutes from './routes/superchargers';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -47,6 +48,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/share-email', shareEmailRoutes);
 app.use('/api/klanten', klantenRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/superchargers', superchargerRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

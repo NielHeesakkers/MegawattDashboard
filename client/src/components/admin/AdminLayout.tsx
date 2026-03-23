@@ -21,16 +21,6 @@ const navItems: NavEntry[] = [
       { type: 'item', to: '/admin/client-teams', label: 'Klantteams' },
     ],
   },
-  {
-    type: 'group',
-    label: 'Planning',
-    divider: true,
-    children: [
-      { type: 'item', to: '/admin/projects/new', label: 'Nieuw project' },
-      { type: 'item', to: '/admin/projects', label: 'Projecten' },
-      { type: 'item', to: '/admin/superchargers', label: 'Superchargers' },
-    ],
-  },
   { type: 'item', to: '/admin/settings', label: 'Instellingen', divider: true },
   { type: 'item', to: '/admin/versions', label: 'Versiegeschiedenis' },
 ];

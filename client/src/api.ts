@@ -46,8 +46,8 @@ export interface Member {
   email: string | null;
   phone: string | null;
   photo: string | null;
-  teamId: number;
-  team?: Team;
+  teamId: number | null;
+  team?: Team | null;
   isVacancy: boolean;
   isTeamLead: boolean;
   order: number;
@@ -121,6 +121,19 @@ export const fetchAuditLogs = (page = 1, limit = 50) =>
 export const fetchChangelog = () =>
   api.get<{ content: string }>('/audit-logs/changelog').then((r) => r.data.content);
 
+export interface Supercharger {
+  id: number;
+  firstName: string;
+  lastName: string;
+  function: string;
+  email: string | null;
+  phone: string | null;
+  birthDate: string | null;
+  photo: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Client Teams types
 export interface ClientTeam {
   id: number;
@@ -159,16 +172,39 @@ export interface Klant {
   name: string;
   contactPerson: string | null;
   email: string | null;
+  logo: string | null;
   createdAt: string;
   updatedAt: string;
   _count?: { projects: number };
+}
+
+export interface ActivationStaffMember {
+  id: number;
+  activationId: number;
+  superchargerId: number;
+  role: string;
+  supercharger: Supercharger;
 }
 
 export interface Activation {
   id: number;
   projectId: number;
   location: string;
+  locationLat: number | null;
+  locationLon: number | null;
+  locationZoom: number | null;
   date: string | null;
+  briefingToken: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  scheduleItems: string; // JSON string of {time, description}[]
+  tasks: string | null;
+  storeList: string | null;
+  photoRequirements: string | null;
+  extraInfo: string | null;
+  evaluationLink: string | null;
+  target: string | null;
+  staff?: ActivationStaffMember[];
   createdAt: string;
   updatedAt: string;
 }
@@ -178,16 +214,30 @@ export interface Project {
   klantId: number;
   klant?: Klant;
   projectNumber: string;
+  name: string | null;
   startDate: string;
   endDate: string;
   status: 'active' | 'completed';
   contactPerson: string | null;
   email: string | null;
+  campaignDescription: string | null;
+  campaignMessage: string | null;
+  campaignTargetAudience: string | null;
+  campaignTarget: string | null;
+  clothing: string | null;
+  settingInstructions: string | null;
+  extraInfo: string | null;
   activations?: Activation[];
   _count?: { activations: number };
   createdAt: string;
   updatedAt: string;
 }
+
+// Superchargers
+export const fetchSuperchargers = () => api.get<Supercharger[]>('/superchargers').then((r) => r.data);
+export const createSupercharger = (data: FormData) => api.post<Supercharger>('/superchargers', data).then((r) => r.data);
+export const updateSupercharger = (id: number, data: FormData) => api.put<Supercharger>(`/superchargers/${id}`, data).then((r) => r.data);
+export const deleteSupercharger = (id: number) => api.delete(`/superchargers/${id}`);
 
 // Client Teams API
 export const fetchClientTeams = () => api.get<ClientTeam[]>('/client-teams').then((r) => r.data);
@@ -217,8 +267,8 @@ export const reorderClients = (orders: { id: number; order: number }[]) =>
 // Klanten
 export const fetchKlanten = () => api.get<Klant[]>('/klanten').then((r) => r.data);
 export const fetchKlant = (id: number) => api.get<Klant>(`/klanten/${id}`).then((r) => r.data);
-export const createKlant = (data: Partial<Klant>) => api.post<Klant>('/klanten', data).then((r) => r.data);
-export const updateKlant = (id: number, data: Partial<Klant>) => api.put<Klant>(`/klanten/${id}`, data).then((r) => r.data);
+export const createKlant = (data: FormData) => api.post<Klant>('/klanten', data).then((r) => r.data);
+export const updateKlant = (id: number, data: FormData) => api.put<Klant>(`/klanten/${id}`, data).then((r) => r.data);
 export const deleteKlant = (id: number) => api.delete(`/klanten/${id}`);
 
 // Projects
@@ -235,9 +285,13 @@ export const deleteProject = (id: number) => api.delete(`/projects/${id}`);
 // Activations (nested under projects)
 export const createActivation = (projectId: number, data: Partial<Activation>) =>
   api.post<Activation>(`/projects/${projectId}/activations`, data).then((r) => r.data);
-export const updateActivation = (id: number, data: Partial<Activation>) =>
+export const updateActivation = (id: number, data: Record<string, unknown>) =>
   api.put<Activation>(`/projects/activations/${id}`, data).then((r) => r.data);
 export const deleteActivation = (id: number) => api.delete(`/projects/activations/${id}`);
+
+// Public briefing (no auth needed)
+export const fetchBriefing = (token: string) =>
+  axios.get<Activation & { project: Project }>(`/api/projects/briefing/${token}`).then((r) => r.data);
 
 // Backup operations
 export const exportBackup = () =>

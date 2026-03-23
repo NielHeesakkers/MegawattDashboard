@@ -25,8 +25,8 @@ model Member {
   email                 String?
   phone                 String?
   photo                 String?
-  teamId                Int
-  team                  Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId                Int?
+  team                  Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
   isVacancy             Boolean            @default(false)
   isTeamLead            Boolean            @default(false)
   order                 Int
@@ -81,6 +81,20 @@ model Client {
   order        Int
 }
 
+model Supercharger {
+  id          Int               @id @default(autoincrement())
+  firstName   String
+  lastName    String
+  function    String            @default("Supercharger")
+  email       String?
+  phone       String?
+  birthDate   DateTime?
+  photo       String?
+  activations ActivationStaff[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
 model AuditLog {
   id          Int      @id @default(autoincrement())
   action      String
@@ -109,36 +123,73 @@ model Klant {
   name          String    @unique
   contactPerson String?
   email         String?
+  logo          String?
   projects      Project[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
 
 model Project {
-  id            Int          @id @default(autoincrement())
-  klantId       Int
-  klant         Klant        @relation(fields: [klantId], references: [id], onDelete: Restrict)
-  projectNumber String       @unique
-  startDate     DateTime
-  endDate       DateTime
-  status        String       @default("active")
-  contactPerson String?
-  email         String?
-  activations   Activation[]
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id                     Int          @id @default(autoincrement())
+  klantId                Int
+  klant                  Klant        @relation(fields: [klantId], references: [id], onDelete: Restrict)
+  projectNumber          String       @unique
+  name                   String?
+  startDate              DateTime
+  endDate                DateTime
+  status                 String       @default("active")
+  contactPerson          String?
+  email                  String?
+  // Campagne-brede briefing velden
+  campaignDescription    String?
+  campaignMessage        String?
+  campaignTargetAudience String?
+  campaignTarget         String?
+  clothing               String?
+  settingInstructions    String?
+  extraInfo              String?
+  activations            Activation[]
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
 
   @@index([klantId])
 }
 
 model Activation {
-  id        Int       @id @default(autoincrement())
-  projectId Int
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  location  String    @default("")
-  date      DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id                Int               @id @default(autoincrement())
+  projectId         Int
+  project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  location          String            @default("")
+  locationLat       Float?
+  locationLon       Float?
+  locationZoom      Int?
+  date              DateTime?
+  briefingToken     String?           @unique
+  startTime         String?
+  endTime           String?
+  scheduleItems     String            @default("[]")
+  tasks             String?
+  storeList         String?
+  photoRequirements String?
+  extraInfo         String?
+  evaluationLink    String?
+  target            String?
+  staff             ActivationStaff[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   @@index([projectId])
+}
+
+model ActivationStaff {
+  id             Int          @id @default(autoincrement())
+  activationId   Int
+  activation     Activation   @relation(fields: [activationId], references: [id], onDelete: Cascade)
+  superchargerId Int
+  supercharger   Supercharger @relation(fields: [superchargerId], references: [id], onDelete: Cascade)
+  role           String       @default("supercharger")
+
+  @@unique([activationId, superchargerId])
+  @@index([activationId])
+  @@index([superchargerId])
 }

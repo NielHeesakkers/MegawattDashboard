@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
-import { upload, processPhoto, deletePhoto } from '../middleware/upload';
+import { upload, processPhotoTo, deletePhoto } from '../middleware/upload';
 import { logAudit } from '../lib/audit';
 
 const router = Router();
@@ -20,7 +20,7 @@ router.post(
   '/',
   authMiddleware,
   upload.single('photo'),
-  processPhoto,
+  processPhotoTo('Directie'),
   async (req: AuthRequest, res: Response) => {
     const { name, role, email, phone, photo, level } = req.body;
     const exec = await prisma.executive.create({
@@ -43,7 +43,7 @@ router.put(
   '/:id',
   authMiddleware,
   upload.single('photo'),
-  processPhoto,
+  processPhotoTo('Directie'),
   async (req: AuthRequest, res: Response) => {
     const id = Number(req.params.id);
     const existing = await prisma.executive.findUnique({ where: { id } });

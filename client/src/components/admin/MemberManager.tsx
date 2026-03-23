@@ -142,7 +142,7 @@ export default function MemberManager() {
     setForm({
       ...emptyForm,
       // Pre-select the currently filtered team
-      teamId: filterTeam !== 'all' ? filterTeam : '',
+      teamId: filterTeam !== 'all' && filterTeam !== 'inactief' && filterTeam !== 'vacatures' ? filterTeam : '',
     });
     setEditingId(null);
     setPhotoFile(null);
@@ -159,7 +159,7 @@ export default function MemberManager() {
       role: m.role,
       email: m.email || '',
       phone: m.phone || '',
-      teamId: String(m.teamId),
+      teamId: m.teamId ? String(m.teamId) : 'null',
       isVacancy: m.isVacancy,
       isTeamLead: m.isTeamLead,
       subGroup: m.subGroup || '',
@@ -330,9 +330,11 @@ export default function MemberManager() {
 
   const teamFiltered = filterTeam === 'all'
     ? members
-    : filterTeam === 'vacatures'
-      ? members.filter((m) => m.isVacancy)
-      : members.filter((m) => String(m.teamId) === filterTeam);
+    : filterTeam === 'inactief'
+      ? members.filter((m) => !m.teamId)
+      : filterTeam === 'vacatures'
+        ? members.filter((m) => m.isVacancy)
+        : members.filter((m) => String(m.teamId) === filterTeam);
   const filtered = (searchQuery
     ? teamFiltered.filter((m) => {
         const q = searchQuery.toLowerCase();
@@ -398,6 +400,7 @@ export default function MemberManager() {
           className="px-3 py-2 rounded-lg bg-bg-card border border-white/10 text-white text-sm"
         >
           <option value="all">Alle teams</option>
+          <option value="inactief">Inactief</option>
           <option value="vacatures">Vacatures</option>
           {teams.map((t) => (
             <option key={t.id} value={String(t.id)}>{t.name}</option>
@@ -580,9 +583,9 @@ export default function MemberManager() {
               <select
                 value={form.teamId} onChange={(e) => { setForm({ ...form, teamId: e.target.value, subGroup: '' }); setCustomSubGroup(false); }}
                 className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
-                required
               >
                 <option value="">Selecteer team</option>
+                <option value="null">Inactief</option>
                 {teams.map((t) => (
                   <option key={t.id} value={String(t.id)}>{t.name}</option>
                 ))}
@@ -752,6 +755,7 @@ export default function MemberManager() {
               className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
             >
               <option value="">Selecteer team</option>
+              <option value="null">Inactief</option>
               {teams.map((t) => (
                 <option key={t.id} value={String(t.id)}>{t.name}</option>
               ))}

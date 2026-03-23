@@ -8,8 +8,10 @@ import SearchBar from './SearchBar';
 import KlantteamsView from './KlantteamsView';
 import EmailShareModal from './EmailShareModal';
 import { OrganigramSkeleton } from '../ui/Skeleton';
-import ProjectForm from '../admin/ProjectForm';
+import KlantenManager from '../admin/KlantenManager';
 import ProjectList from '../admin/ProjectList';
+import ProjectForm from '../admin/ProjectForm';
+import SuperchargerManager from '../admin/SuperchargerManager';
 import { useAuth } from '../../context/AuthContext';
 import LoginForm from '../ui/LoginForm';
 
@@ -21,7 +23,7 @@ function MegawattLogo() {
   );
 }
 
-type ViewMode = 'dashboard' | 'klantteams' | 'planning-nieuw' | 'planning-lopend' | 'planning-afgerond';
+type ViewMode = 'dashboard' | 'klantteams' | 'planning-projecten' | 'planning-klanten' | 'planning-superchargers';
 
 type OrgBranch =
   | { kind: 'team'; team: Team }
@@ -31,10 +33,10 @@ export default function OrganigramPage() {
   const { isAuthenticated, isAdmin, hasTab, allowedTabs, logout, username } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('megawatt-view-mode');
-    if (saved === 'klantteams' || saved === 'planning-nieuw' || saved === 'planning-lopend' || saved === 'planning-afgerond') return saved;
+    if (saved === 'klantteams' || saved === 'planning-projecten' || saved === 'planning-klanten' || saved === 'planning-superchargers') return saved;
     return 'dashboard';
   });
-  const [editingProjectId, setEditingProjectId] = useState<number | undefined>(undefined);
+  const [editingProjectId, setEditingProjectId] = useState<number | 'new' | undefined>(undefined);
   const handleViewMode = (mode: ViewMode) => {
     setViewMode(mode);
     setEditingProjectId(undefined);
@@ -46,7 +48,7 @@ export default function OrganigramPage() {
     const isPlanView = viewMode.startsWith('planning-');
     if (isInternView && !hasTab('intern')) {
       if (hasTab('planning')) {
-        handleViewMode('planning-lopend');
+        handleViewMode('planning-klanten');
       }
     } else if (isPlanView && !hasTab('planning')) {
       if (hasTab('intern')) {
@@ -349,9 +351,9 @@ export default function OrganigramPage() {
               {planningMenuOpen && (
                 <div className="absolute top-full right-0 mt-[10px] z-50 w-48 bg-bg-surface rounded-xl ring-1 ring-[rgba(255,255,255,0.12)] shadow-2xl overflow-hidden animate-[slideDown_100ms_ease-out]">
                   {([
-                    { mode: 'planning-nieuw' as ViewMode, label: 'Nieuw project' },
-                    { mode: 'planning-lopend' as ViewMode, label: 'Lopende projecten' },
-                    { mode: 'planning-afgerond' as ViewMode, label: 'Afgeronde projecten' },
+                    { mode: 'planning-projecten' as ViewMode, label: 'Projecten' },
+                    { mode: 'planning-klanten' as ViewMode, label: 'Klanten' },
+                    { mode: 'planning-superchargers' as ViewMode, label: 'Superchargers' },
                   ]).map((item, i) => (
                     <div key={item.mode}>
                       {i > 0 && <div className="border-t border-[rgba(255,255,255,0.06)]" />}
@@ -457,23 +459,25 @@ export default function OrganigramPage() {
       {/* View content */}
       {isPlanningView ? (
         <div className="mx-auto max-w-5xl px-6 py-8">
-          {editingProjectId !== undefined ? (
+          {viewMode === 'planning-klanten' ? (
+            <KlantenManager />
+          ) : viewMode === 'planning-superchargers' ? (
+            <SuperchargerManager />
+          ) : editingProjectId === 'new' ? (
+            <ProjectForm
+              onBack={() => setEditingProjectId(undefined)}
+              onCreated={(id: number) => setEditingProjectId(id)}
+            />
+          ) : editingProjectId !== undefined ? (
             <ProjectForm
               projectId={editingProjectId}
               onBack={() => setEditingProjectId(undefined)}
-              onCreated={(id) => setEditingProjectId(id)}
-            />
-          ) : viewMode === 'planning-nieuw' ? (
-            <ProjectForm
-              onBack={() => handleViewMode('planning-lopend')}
-              onCreated={(id) => setEditingProjectId(id)}
+              onCreated={(id: number) => setEditingProjectId(id)}
             />
           ) : (
             <ProjectList
-              statusOverride={viewMode === 'planning-afgerond' ? 'completed' : 'active'}
-              onEditProject={(id) => setEditingProjectId(id)}
-              onNewProject={() => handleViewMode('planning-nieuw')}
-              onToggleView={() => handleViewMode(viewMode === 'planning-afgerond' ? 'planning-lopend' : 'planning-afgerond')}
+              onEditProject={(id: number) => setEditingProjectId(id)}
+              onNewProject={() => setEditingProjectId('new')}
             />
           )}
         </div>

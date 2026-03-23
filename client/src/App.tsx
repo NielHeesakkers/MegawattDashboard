@@ -12,10 +12,11 @@ import ExecutiveManager from './components/admin/ExecutiveManager';
 import VersionHistory from './components/admin/VersionHistory';
 import ClientTeamManager from './components/admin/ClientTeamManager';
 import Settings from './components/admin/Settings';
-import SuperchargersPlaceholder from './components/admin/SuperchargersPlaceholder';
+import SuperchargerManager from './components/admin/SuperchargerManager';
 import KlantenManager from './components/admin/KlantenManager';
 import ProjectList from './components/admin/ProjectList';
 import ProjectForm from './components/admin/ProjectForm';
+import BriefingPage from './components/BriefingPage';
 
 export default function App() {
   return (
@@ -23,6 +24,9 @@ export default function App() {
     <ToastProvider>
     <AuthProvider>
       <Routes>
+        {/* Public briefing page (no auth) */}
+        <Route path="/briefing/:token" element={<BriefingPage />} />
+
         {/* Public dashboard */}
         <Route path="/" element={<OrganigramPage />} />
 
@@ -38,9 +42,8 @@ export default function App() {
           <Route path="klanten" element={<KlantenManager />} />
           <Route path="projects" element={<ProjectList />} />
           <Route path="projects/new" element={<ProjectForm />} />
-          <Route path="projects/completed" element={<ProjectList />} />
           <Route path="projects/:id" element={<ProjectForm />} />
-          <Route path="superchargers" element={<SuperchargersPlaceholder />} />
+          <Route path="superchargers" element={<SuperchargerManager />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
