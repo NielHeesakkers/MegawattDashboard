@@ -257,7 +257,7 @@ router.delete('/activations/:id', authMiddleware, async (req: AuthRequest, res: 
 
 router.get('/briefing/:token', async (req: Request, res: Response) => {
   const activation = await prisma.activation.findUnique({
-    where: { briefingToken: req.params.token },
+    where: { briefingToken: String(req.params.token) },
     include: {
       project: {
         include: { klant: true },
