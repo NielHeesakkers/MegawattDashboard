@@ -27,6 +27,10 @@ import klantenRoutes from './routes/klanten';
 import projectRoutes from './routes/projects';
 import superchargerRoutes from './routes/superchargers';
 
+process.on('unhandledRejection', (reason) => {
+  console.error('[Unhandled Rejection]', reason);
+});
+
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 
@@ -53,6 +57,13 @@ app.use('/api/superchargers', superchargerRoutes);
 // Health check
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Global error handler — log errors to stdout
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[API Error]', err?.message || err);
+  if (err?.stack) console.error(err.stack);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // In production, serve the built frontend (single process)
