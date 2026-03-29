@@ -133,12 +133,14 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
 
     // Replace data in transaction with ID remapping
     await prisma.$transaction(async (tx) => {
+      await tx.activationStaff.deleteMany();
       await tx.activation.deleteMany();
       await tx.project.deleteMany();
       await tx.klant.deleteMany();
       await tx.client.deleteMany();
       await tx.clientTeamMember.deleteMany();
       await tx.clientTeam.deleteMany();
+      await tx.supercharger.deleteMany();
       await tx.member.deleteMany();
       await tx.team.deleteMany();
       await tx.executive.deleteMany();
@@ -322,12 +324,14 @@ router.delete('/clear', authMiddleware, async (req: AuthRequest, res: Response) 
     ]);
 
     await prisma.$transaction(async (tx) => {
+      await tx.activationStaff.deleteMany();
       await tx.activation.deleteMany();
       await tx.project.deleteMany();
       await tx.klant.deleteMany();
       await tx.client.deleteMany();
       await tx.clientTeamMember.deleteMany();
       await tx.clientTeam.deleteMany();
+      await tx.supercharger.deleteMany();
       await tx.member.deleteMany();
       await tx.team.deleteMany();
       await tx.executive.deleteMany();
