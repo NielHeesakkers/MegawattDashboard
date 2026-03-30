@@ -305,9 +305,9 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
         members: backupData.members.length,
       },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Import failed:', err);
-    res.status(500).json({ error: 'Import failed' });
+    res.status(500).json({ error: 'Import failed', detail: err?.message || String(err) });
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
     if (fs.existsSync(tmpZip)) fs.unlinkSync(tmpZip);
