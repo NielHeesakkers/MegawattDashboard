@@ -277,7 +277,12 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
     // Replace photos
     if (fs.existsSync(uploadsDir)) {
       for (const file of fs.readdirSync(uploadsDir)) {
-        fs.unlinkSync(path.join(uploadsDir, file));
+        const full = path.join(uploadsDir, file);
+        if (fs.statSync(full).isDirectory()) {
+          fs.rmSync(full, { recursive: true, force: true });
+        } else {
+          fs.unlinkSync(full);
+        }
       }
     } else {
       fs.mkdirSync(uploadsDir, { recursive: true });
@@ -285,9 +290,19 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
 
     const extractedUploads = path.join(tmpDir, 'uploads');
     if (fs.existsSync(extractedUploads)) {
-      for (const photo of fs.readdirSync(extractedUploads)) {
-        fs.copyFileSync(path.join(extractedUploads, photo), path.join(uploadsDir, photo));
-      }
+      const copyRecursive = (src: string, dest: string) => {
+        for (const entry of fs.readdirSync(src)) {
+          const srcPath = path.join(src, entry);
+          const destPath = path.join(dest, entry);
+          if (fs.statSync(srcPath).isDirectory()) {
+            fs.mkdirSync(destPath, { recursive: true });
+            copyRecursive(srcPath, destPath);
+          } else {
+            fs.copyFileSync(srcPath, destPath);
+          }
+        }
+      };
+      copyRecursive(extractedUploads, uploadsDir);
     }
 
     await logAudit('CREATE', 'Backup', 0, {
