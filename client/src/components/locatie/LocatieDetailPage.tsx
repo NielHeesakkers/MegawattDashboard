@@ -115,13 +115,18 @@ function fromLocation(loc: Location): FormState {
 export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCreated }: Props) {
   const toast = useToast();
   const [form, setForm] = useState<FormState>(emptyForm());
+  const [addr, setAddr] = useState<AddressParts>({ straat: '', huisnummer: '', postcode: '', plaats: '' });
   const [originalLocation, setOriginalLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(locationId !== 'new');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (locationId === 'new') return;
-    fetchLocation(locationId).then((loc) => { setOriginalLocation(loc); setForm(fromLocation(loc)); }).finally(() => setLoading(false));
+    fetchLocation(locationId).then((loc) => {
+      setOriginalLocation(loc);
+      setForm(fromLocation(loc));
+      setAddr(parseAddress(loc.adres));
+    }).finally(() => setLoading(false));
   }, [locationId]);
 
   const isDirty = (() => {
@@ -136,6 +141,14 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
   useUnsavedChanges(isDirty);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
+
+  const updateAddr = (patch: Partial<AddressParts>) => {
+    setAddr((prev) => {
+      const next = { ...prev, ...patch };
+      setForm((f) => ({ ...f, adres: formatAddressParts(next) }));
+      return next;
+    });
+  };
 
   const onLengteBreedteChange = (lengte: number | null, breedte: number | null) => {
     setForm((f) => ({
@@ -157,6 +170,7 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
         const updated = await updateLocation(locationId, writeInput);
         setOriginalLocation(updated);
         setForm(fromLocation(updated));
+        setAddr(parseAddress(updated.adres));
         toast.success('Wijzigingen opgeslagen');
       }
     } catch (e: any) {
@@ -178,8 +192,12 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
     if (locationId === 'new') { toast.error('Sla eerst op voordat je kunt geocoden'); return; }
     const result = await geocodeLocation(locationId);
     setForm((f) => ({ ...f, lat: result.lat, lng: result.lng, adres: result.found ? result.adres : f.adres }));
-    if (result.found) toast.success('Adres en coördinaten bijgewerkt');
-    else toast.error('Adres niet gevonden');
+    if (result.found) {
+      setAddr(parseAddress(result.adres));
+      toast.success('Adres en coördinaten bijgewerkt');
+    } else {
+      toast.error('Adres niet gevonden');
+    }
   };
 
   if (loading) return <div className="p-8 text-[rgba(255,255,255,0.5)]">Laden…</div>;
@@ -214,18 +232,12 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
           </Field>
         </div>
         <Field label="Adres">
-          {(() => {
-            const addr = parseAddress(form.adres);
-            const upd = (patch: Partial<AddressParts>) => set('adres', formatAddressParts({ ...addr, ...patch }));
-            return (
-              <div className="grid grid-cols-12 gap-2">
-                <input className={`${inputClass} col-span-5`} placeholder="Straat" value={addr.straat} onChange={(e) => upd({ straat: e.target.value })} />
-                <input className={`${inputClass} col-span-2`} placeholder="Nr." value={addr.huisnummer} onChange={(e) => upd({ huisnummer: e.target.value })} />
-                <input className={`${inputClass} col-span-2`} placeholder="Postcode" value={addr.postcode} onChange={(e) => upd({ postcode: e.target.value })} />
-                <input className={`${inputClass} col-span-3`} placeholder="Plaats" value={addr.plaats} onChange={(e) => upd({ plaats: e.target.value })} />
-              </div>
-            );
-          })()}
+          <div className="grid grid-cols-12 gap-2">
+            <input className={`${inputClass} col-span-5`} placeholder="Straat" value={addr.straat} onChange={(e) => updateAddr({ straat: e.target.value })} />
+            <input className={`${inputClass} col-span-2`} placeholder="Nr." value={addr.huisnummer} onChange={(e) => updateAddr({ huisnummer: e.target.value })} />
+            <input className={`${inputClass} col-span-2`} placeholder="Postcode" value={addr.postcode} onChange={(e) => updateAddr({ postcode: e.target.value })} />
+            <input className={`${inputClass} col-span-3`} placeholder="Plaats" value={addr.plaats} onChange={(e) => updateAddr({ plaats: e.target.value })} />
+          </div>
         </Field>
         <div className="flex gap-3 mb-3">
           <button onClick={reGeocode} className="h-9 px-3 rounded-lg bg-[rgba(255,255,255,0.06)] ring-1 ring-[rgba(255,255,255,0.15)] text-white text-[12px] hover:bg-[rgba(255,255,255,0.12)] cursor-pointer">Geocode adres</button>

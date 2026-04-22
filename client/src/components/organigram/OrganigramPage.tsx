@@ -40,7 +40,16 @@ export default function OrganigramPage() {
     return 'dashboard';
   });
   const [editingProjectId, setEditingProjectId] = useState<number | 'new' | undefined>(undefined);
-  const [editingLocationId, setEditingLocationId] = useState<number | 'new' | undefined>(undefined);
+  const [editingLocationId, setEditingLocationId] = useState<number | 'new' | undefined>(() => {
+    const saved = localStorage.getItem('megawatt-editing-location');
+    if (saved === 'new') return 'new';
+    const n = Number(saved);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  });
+  useEffect(() => {
+    if (editingLocationId === undefined) localStorage.removeItem('megawatt-editing-location');
+    else localStorage.setItem('megawatt-editing-location', String(editingLocationId));
+  }, [editingLocationId]);
   const handleViewMode = (mode: ViewMode) => {
     setViewMode(mode);
     setEditingProjectId(undefined);
