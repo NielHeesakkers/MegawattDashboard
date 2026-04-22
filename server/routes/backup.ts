@@ -49,12 +49,16 @@ interface BackupData {
   klanten?: any[];
   projects?: any[];
   activations?: any[];
+  locations?: any[];
+  locationContacts?: any[];
+  locationPhotos?: any[];
+  locationCosts?: any[];
 }
 
 // Export: download ZIP with data.json + uploads/
 router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const [executives, teams, members, clientTeams, clientTeamMembers, clients, users, klanten, projects, activations] = await Promise.all([
+    const [executives, teams, members, clientTeams, clientTeamMembers, clients, users, klanten, projects, activations, locations, locationContacts, locationPhotos, locationCosts] = await Promise.all([
       prisma.executive.findMany({ orderBy: { level: 'asc' } }),
       prisma.team.findMany({ orderBy: { order: 'asc' } }),
       prisma.member.findMany({ orderBy: [{ teamId: 'asc' }, { order: 'asc' }] }),
@@ -65,6 +69,10 @@ router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) =>
       prisma.klant.findMany({ orderBy: { name: 'asc' } }),
       prisma.project.findMany({ orderBy: { id: 'asc' } }),
       prisma.activation.findMany({ orderBy: { id: 'asc' } }),
+      prisma.location.findMany({ orderBy: { id: 'asc' } }),
+      prisma.locationContact.findMany({ orderBy: { id: 'asc' } }),
+      prisma.locationPhoto.findMany({ orderBy: { id: 'asc' } }),
+      prisma.locationCost.findMany({ orderBy: { id: 'asc' } }),
     ]);
 
     const backupData: BackupData = {
@@ -80,6 +88,10 @@ router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) =>
       klanten,
       projects,
       activations,
+      locations,
+      locationContacts,
+      locationPhotos,
+      locationCosts,
     };
 
     const archive = archiver('zip', { zlib: { level: 9 } });
@@ -133,6 +145,10 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
 
     // Replace data in transaction with ID remapping
     await prisma.$transaction(async (tx) => {
+      await tx.locationCost.deleteMany();
+      await tx.locationPhoto.deleteMany();
+      await tx.locationContact.deleteMany();
+      await tx.location.deleteMany();
       await tx.activationStaff.deleteMany();
       await tx.activation.deleteMany();
       await tx.project.deleteMany();
@@ -272,6 +288,40 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
           });
         }
       }
+
+      // Import locations met ID-remapping
+      const locIdMap = new Map<number, number>();
+      if (backupData.locations) {
+        for (const loc of backupData.locations) {
+          const { id: oldId, contacts: _c, photos: _p, costs: _cs, ...data } = loc;
+          const created = await tx.location.create({ data });
+          locIdMap.set(oldId, created.id);
+        }
+      }
+      if (backupData.locationContacts) {
+        for (const c of backupData.locationContacts) {
+          const { id: _oldId, location: _l, ...data } = c;
+          const newId = locIdMap.get(data.locationId);
+          if (!newId) continue;
+          await tx.locationContact.create({ data: { ...data, locationId: newId } });
+        }
+      }
+      if (backupData.locationPhotos) {
+        for (const p of backupData.locationPhotos) {
+          const { id: _oldId, location: _l, ...data } = p;
+          const newId = locIdMap.get(data.locationId);
+          if (!newId) continue;
+          await tx.locationPhoto.create({ data: { ...data, locationId: newId } });
+        }
+      }
+      if (backupData.locationCosts) {
+        for (const c of backupData.locationCosts) {
+          const { id: _oldId, location: _l, ...data } = c;
+          const newId = locIdMap.get(data.locationId);
+          if (!newId) continue;
+          await tx.locationCost.create({ data: { ...data, locationId: newId } });
+        }
+      }
     });
 
     // Replace photos
@@ -339,6 +389,10 @@ router.delete('/clear', authMiddleware, async (req: AuthRequest, res: Response) 
     ]);
 
     await prisma.$transaction(async (tx) => {
+      await tx.locationCost.deleteMany();
+      await tx.locationPhoto.deleteMany();
+      await tx.locationContact.deleteMany();
+      await tx.location.deleteMany();
       await tx.activationStaff.deleteMany();
       await tx.activation.deleteMany();
       await tx.project.deleteMany();
@@ -377,7 +431,7 @@ router.delete('/clear', authMiddleware, async (req: AuthRequest, res: Response) 
 
 async function createAutoBackup(): Promise<string | null> {
   try {
-    const [executives, teams, members, clientTeams, clientTeamMembers, clients, users, klanten, projects, activations] = await Promise.all([
+    const [executives, teams, members, clientTeams, clientTeamMembers, clients, users, klanten, projects, activations, locations, locationContacts, locationPhotos, locationCosts] = await Promise.all([
       prisma.executive.findMany({ orderBy: { level: 'asc' } }),
       prisma.team.findMany({ orderBy: { order: 'asc' } }),
       prisma.member.findMany({ orderBy: [{ teamId: 'asc' }, { order: 'asc' }] }),
@@ -388,6 +442,10 @@ async function createAutoBackup(): Promise<string | null> {
       prisma.klant.findMany({ orderBy: { name: 'asc' } }),
       prisma.project.findMany({ orderBy: { id: 'asc' } }),
       prisma.activation.findMany({ orderBy: { id: 'asc' } }),
+      prisma.location.findMany({ orderBy: { id: 'asc' } }),
+      prisma.locationContact.findMany({ orderBy: { id: 'asc' } }),
+      prisma.locationPhoto.findMany({ orderBy: { id: 'asc' } }),
+      prisma.locationCost.findMany({ orderBy: { id: 'asc' } }),
     ]);
 
     const backupData: BackupData = {
@@ -403,6 +461,10 @@ async function createAutoBackup(): Promise<string | null> {
       klanten,
       projects,
       activations,
+      locations,
+      locationContacts,
+      locationPhotos,
+      locationCosts,
     };
 
     const date = new Date();
