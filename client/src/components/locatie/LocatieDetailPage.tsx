@@ -2,15 +2,16 @@ import { useEffect, useState } from 'react';
 import { useToast } from '../ui/Toast';
 import {
   fetchLocation, createLocation, updateLocation, deleteLocation, geocodeLocation,
-  Location, LocationWriteInput, OmgevingType, Orientatie,
+  Location, LocationWriteInput, OmgevingType, Orientatie, LocationPhoto,
 } from '../../api';
 import LocatieMap from './LocatieMap';
 import LocatieContactsSection from './LocatieContactsSection';
 import LocatieCostsSection from './LocatieCostsSection';
+import LocatiePhotoManager from './LocatiePhotoManager';
 
 interface Props { locationId: number | 'new'; onBack: () => void; onDeleted: () => void; }
 
-type FormState = LocationWriteInput & { lat: number | null; lng: number | null };
+type FormState = LocationWriteInput & { lat: number | null; lng: number | null; photos: LocationPhoto[] };
 
 function emptyForm(): FormState {
   return {
@@ -24,6 +25,7 @@ function emptyForm(): FormState {
     notities: '',
     contacts: [],
     costs: [{ label: 'Locatiehuur', bedragCents: 0 }],
+    photos: [],
   };
 }
 
@@ -39,6 +41,7 @@ function fromLocation(loc: Location): FormState {
     notities: loc.notities,
     contacts: loc.contacts.map(({ id: _i, locationId: _l, order: _o, ...rest }) => rest),
     costs: loc.costs.map(({ id: _i, locationId: _l, order: _o, ...rest }) => rest),
+    photos: loc.photos,
   };
 }
 
@@ -67,7 +70,7 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted }: Pro
   const save = async () => {
     setSaving(true);
     try {
-      const { lat: _la, lng: _ln, ...writeInput } = form;
+      const { lat: _la, lng: _ln, photos: _ph, ...writeInput } = form;
       if (locationId === 'new') {
         const created = await createLocation(writeInput);
         toast.success('Locatie opgeslagen');
@@ -216,8 +219,10 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted }: Pro
         <LocatieCostsSection costs={form.costs} onChange={(costs) => set('costs', costs)} />
       </Section>
 
-      {locationId !== 'new' && originalLocation && (
-        <p className="text-[11px] text-[rgba(255,255,255,0.3)]">Foto's komen in Task 18.</p>
+      {locationId !== 'new' && typeof locationId === 'number' && (
+        <Section title="Foto's">
+          <LocatiePhotoManager locationId={locationId} photos={form.photos} onChange={(photos) => set('photos', photos)} />
+        </Section>
       )}
     </div>
   );
