@@ -1,8 +1,11 @@
+import fs from 'fs';
+import path from 'path';
 import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
 import { geocode } from '../lib/geocode';
+import { uploadsDir } from '../middleware/upload';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -149,6 +152,35 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 
   await logAudit('UPDATE', 'Location', id, { naam: body.naam }, req.adminUsername);
   res.json(location);
+});
+
+// DELETE /api/locations/:id
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  const existing = await prisma.location.findUnique({ where: { id } });
+  if (!existing) { res.status(404).json({ error: 'Locatie niet gevonden' }); return; }
+
+  await prisma.location.delete({ where: { id } });
+
+  // Opruimen van foto-bestanden
+  const photoDir = path.join(uploadsDir, 'Locaties', String(id));
+  if (fs.existsSync(photoDir)) fs.rmSync(photoDir, { recursive: true, force: true });
+
+  await logAudit('DELETE', 'Location', id, { naam: existing.naam }, req.adminUsername);
+  res.json({ success: true });
+});
+
+// POST /api/locations/:id/geocode — handmatig opnieuw geocoden
+router.post('/:id/geocode', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  const existing = await prisma.location.findUnique({ where: { id } });
+  if (!existing) { res.status(404).json({ error: 'Locatie niet gevonden' }); return; }
+  const coords = existing.adres ? await geocode(existing.adres) : null;
+  const updated = await prisma.location.update({
+    where: { id },
+    data: { lat: coords?.lat ?? null, lng: coords?.lng ?? null },
+  });
+  res.json({ lat: updated.lat, lng: updated.lng, found: !!coords });
 });
 
 export default router;
