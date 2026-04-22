@@ -474,7 +474,7 @@ export async function geocodeLocation(id: number): Promise<{ lat: number | null;
 export async function uploadLocationPhotos(id: number, files: File[]): Promise<LocationPhoto[]> {
   const form = new FormData();
   for (const f of files) form.append('photos', f);
-  const { data } = await api.post(`/locations/${id}/photos`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  const { data } = await api.post(`/locations/${id}/photos`, form);
   return data;
 }
 
