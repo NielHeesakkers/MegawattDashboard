@@ -10,7 +10,7 @@ import LocatieContactsSection from './LocatieContactsSection';
 import LocatieCostsSection from './LocatieCostsSection';
 import LocatiePhotoManager from './LocatiePhotoManager';
 
-interface Props { locationId: number | 'new'; onBack: () => void; onDeleted: () => void; }
+interface Props { locationId: number | 'new'; onBack: () => void; onDeleted: () => void; onCreated: (id: number) => void; }
 
 type FormState = LocationWriteInput & { lat: number | null; lng: number | null; photos: LocationPhoto[] };
 
@@ -46,7 +46,7 @@ function fromLocation(loc: Location): FormState {
   };
 }
 
-export default function LocatieDetailPage({ locationId, onBack, onDeleted }: Props) {
+export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCreated }: Props) {
   const toast = useToast();
   const [form, setForm] = useState<FormState>(emptyForm());
   const [originalLocation, setOriginalLocation] = useState<Location | null>(null);
@@ -59,14 +59,12 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted }: Pro
   }, [locationId]);
 
   const isDirty = (() => {
+    const normalize = (s: FormState) => JSON.stringify({ ...s, photos: null, lat: null, lng: null });
     if (locationId === 'new') {
-      return !!(form.naam || form.adres || form.contacts.length > 0);
+      return normalize(form) !== normalize(emptyForm());
     }
     if (!originalLocation) return false;
-    const orig = fromLocation(originalLocation);
-    // Ignore photos + lat/lng (managed separately)
-    const normalize = (s: FormState) => JSON.stringify({ ...s, photos: null, lat: null, lng: null });
-    return normalize(form) !== normalize(orig);
+    return normalize(form) !== normalize(fromLocation(originalLocation));
   })();
 
   useUnsavedChanges(isDirty);
@@ -88,8 +86,7 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted }: Pro
       if (locationId === 'new') {
         const created = await createLocation(writeInput);
         toast.success('Locatie opgeslagen');
-        setOriginalLocation(created);
-        setForm(fromLocation(created));
+        onCreated(created.id);
       } else {
         const updated = await updateLocation(locationId, writeInput);
         setOriginalLocation(updated);

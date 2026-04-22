@@ -522,6 +522,7 @@ export default function OrganigramPage() {
             locationId={editingLocationId}
             onBack={() => setEditingLocationId(undefined)}
             onDeleted={() => setEditingLocationId(undefined)}
+            onCreated={(id) => setEditingLocationId(id)}
           />
         ) : (
           <LocatieListPage onOpenDetail={(id) => setEditingLocationId(id)} />
