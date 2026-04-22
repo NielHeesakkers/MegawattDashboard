@@ -22,6 +22,7 @@ export default function LocatieCard({ location, onClick }: Props) {
   if (location.truckBereikbaar) chips.push('Bakwagen');
   if (location.eigendomType === 'particulier') chips.push('Particulier');
   else if (location.eigendomType === 'gemeentelijk') chips.push('Gemeentelijk');
+  else if (location.eigendomType === 'bedrijf') chips.push('Bedrijf');
 
   return (
     <button

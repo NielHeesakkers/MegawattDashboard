@@ -264,7 +264,7 @@ export interface LocationCost {
 
 export type OmgevingType = 'centrum' | 'winkelstraat' | 'park' | 'plein' | 'stationsplein';
 export type Orientatie = 'N' | 'NO' | 'O' | 'ZO' | 'Z' | 'ZW' | 'W' | 'NW';
-export type EigendomType = 'particulier' | 'gemeentelijk';
+export type EigendomType = 'particulier' | 'gemeentelijk' | 'bedrijf';
 
 export interface Location {
   id: number;
@@ -466,7 +466,7 @@ export async function deleteLocation(id: number): Promise<void> {
   await api.delete(`/locations/${id}`);
 }
 
-export async function geocodeLocation(id: number): Promise<{ lat: number | null; lng: number | null; found: boolean }> {
+export async function geocodeLocation(id: number): Promise<{ lat: number | null; lng: number | null; adres: string; found: boolean }> {
   const { data } = await api.post(`/locations/${id}/geocode`);
   return data;
 }

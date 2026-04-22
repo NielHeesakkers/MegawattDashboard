@@ -12,6 +12,72 @@ import LocatiePhotoManager from './LocatiePhotoManager';
 
 interface Props { locationId: number | 'new'; onBack: () => void; onDeleted: () => void; onCreated: (id: number) => void; }
 
+const inputClass = 'h-10 px-3 rounded-lg bg-[rgba(255,255,255,0.04)] ring-1 ring-[rgba(255,255,255,0.08)] text-white text-[14px] placeholder-[rgba(255,255,255,0.3)] focus:outline-none focus:ring-[rgba(255,255,255,0.2)]';
+const areaClass = 'px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.04)] ring-1 ring-[rgba(255,255,255,0.08)] text-white text-[14px] placeholder-[rgba(255,255,255,0.3)] focus:outline-none focus:ring-[rgba(255,255,255,0.2)]';
+
+const EUROPESE_LANDEN_PRIO = ['Nederland', 'België', 'Duitsland'];
+const EUROPESE_LANDEN_REST = [
+  'Albanië', 'Andorra', 'Bosnië en Herzegovina', 'Bulgarije', 'Cyprus', 'Denemarken', 'Estland',
+  'Finland', 'Frankrijk', 'Griekenland', 'Hongarije', 'IJsland', 'Ierland', 'Italië', 'Kosovo',
+  'Kroatië', 'Letland', 'Liechtenstein', 'Litouwen', 'Luxemburg', 'Malta', 'Moldavië', 'Monaco',
+  'Montenegro', 'Noord-Macedonië', 'Noorwegen', 'Oekraïne', 'Oostenrijk', 'Polen', 'Portugal',
+  'Roemenië', 'San Marino', 'Servië', 'Slovenië', 'Slowakije', 'Spanje', 'Tsjechië', 'Turkije',
+  'Vaticaanstad', 'Verenigd Koninkrijk', 'Wit-Rusland', 'Zweden', 'Zwitserland',
+];
+
+const OMGEVING_PRESETS: Array<{ key: string; label: string }> = [
+  { key: 'centrum', label: 'Centrum' },
+  { key: 'winkelstraat', label: 'Winkelstraat' },
+  { key: 'park', label: 'Park' },
+  { key: 'plein', label: 'Plein' },
+  { key: 'stationsplein', label: 'Stationsplein' },
+];
+
+interface AddressParts { straat: string; huisnummer: string; postcode: string; plaats: string; }
+
+function parseAddress(adres: string): AddressParts {
+  const parts = adres.split(',').map((s) => s.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    // Part 1: straat + huisnummer
+    const first = parts[0].match(/^(.+?)\s+(\d+[a-zA-Z\-]*)\s*$/);
+    const straat = first ? first[1] : parts[0];
+    const huisnummer = first ? first[2] : '';
+    // Part 2: postcode (NL/BE/DE patterns) + plaats
+    const second = parts[1].match(/^(\d{4}\s?[A-Z]{0,2}|\d{4,5})\s+(.+)$/i);
+    const postcode = second ? second[1] : '';
+    const plaats = second ? second[2] : parts[1];
+    return { straat, huisnummer, postcode, plaats };
+  }
+  // Fallback: one part, probeer huisnummer achteraan
+  const m = adres.match(/^(.+?)\s+(\d+[a-zA-Z\-]*)\s*$/);
+  if (m) return { straat: m[1], huisnummer: m[2], postcode: '', plaats: '' };
+  return { straat: adres, huisnummer: '', postcode: '', plaats: '' };
+}
+
+function formatAddressParts(p: AddressParts): string {
+  const line1 = [p.straat, p.huisnummer].filter(Boolean).join(' ').trim();
+  const line2 = [p.postcode, p.plaats].filter(Boolean).join(' ').trim();
+  return [line1, line2].filter(Boolean).join(', ');
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-8">
+      <h2 className="text-[13px] font-bold uppercase tracking-wider text-[rgba(255,255,255,0.6)] mb-3">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1.5 mb-3">
+      <span className="text-[12px] text-[rgba(255,255,255,0.6)]">{label}</span>
+      {children}
+    </label>
+  );
+}
+
 type FormState = LocationWriteInput & { lat: number | null; lng: number | null; photos: LocationPhoto[] };
 
 function emptyForm(): FormState {
@@ -111,29 +177,12 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
   const reGeocode = async () => {
     if (locationId === 'new') { toast.error('Sla eerst op voordat je kunt geocoden'); return; }
     const result = await geocodeLocation(locationId);
-    setForm((f) => ({ ...f, lat: result.lat, lng: result.lng }));
-    if (result.found) toast.success('Coördinaten bijgewerkt');
+    setForm((f) => ({ ...f, lat: result.lat, lng: result.lng, adres: result.found ? result.adres : f.adres }));
+    if (result.found) toast.success('Adres en coördinaten bijgewerkt');
     else toast.error('Adres niet gevonden');
   };
 
   if (loading) return <div className="p-8 text-[rgba(255,255,255,0.5)]">Laden…</div>;
-
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <section className="mb-8">
-      <h2 className="text-[13px] font-bold uppercase tracking-wider text-[rgba(255,255,255,0.6)] mb-3">{title}</h2>
-      {children}
-    </section>
-  );
-
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <label className="flex flex-col gap-1.5 mb-3">
-      <span className="text-[12px] text-[rgba(255,255,255,0.6)]">{label}</span>
-      {children}
-    </label>
-  );
-
-  const inputClass = 'h-10 px-3 rounded-lg bg-[rgba(255,255,255,0.04)] ring-1 ring-[rgba(255,255,255,0.08)] text-white text-[14px] placeholder-[rgba(255,255,255,0.3)] focus:outline-none focus:ring-[rgba(255,255,255,0.2)]';
-  const areaClass = 'px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.04)] ring-1 ring-[rgba(255,255,255,0.08)] text-white text-[14px] placeholder-[rgba(255,255,255,0.3)] focus:outline-none focus:ring-[rgba(255,255,255,0.2)]';
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-6">
@@ -156,10 +205,27 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
       <Section title="Algemeen">
         <div className="grid grid-cols-2 gap-4">
           <Field label="Naam"><input className={inputClass} value={form.naam} onChange={(e) => set('naam', e.target.value)} /></Field>
-          <Field label="Land"><input className={inputClass} value={form.land} onChange={(e) => set('land', e.target.value)} placeholder="Nederland" /></Field>
+          <Field label="Land">
+            <select className={inputClass} value={form.land} onChange={(e) => set('land', e.target.value)}>
+              {EUROPESE_LANDEN_PRIO.map((l) => <option key={l} value={l}>{l}</option>)}
+              <option disabled>──────────</option>
+              {EUROPESE_LANDEN_REST.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </Field>
         </div>
         <Field label="Adres">
-          <textarea className={areaClass} rows={2} value={form.adres} onChange={(e) => set('adres', e.target.value)} />
+          {(() => {
+            const addr = parseAddress(form.adres);
+            const upd = (patch: Partial<AddressParts>) => set('adres', formatAddressParts({ ...addr, ...patch }));
+            return (
+              <div className="grid grid-cols-12 gap-2">
+                <input className={`${inputClass} col-span-5`} placeholder="Straat" value={addr.straat} onChange={(e) => upd({ straat: e.target.value })} />
+                <input className={`${inputClass} col-span-2`} placeholder="Nr." value={addr.huisnummer} onChange={(e) => upd({ huisnummer: e.target.value })} />
+                <input className={`${inputClass} col-span-2`} placeholder="Postcode" value={addr.postcode} onChange={(e) => upd({ postcode: e.target.value })} />
+                <input className={`${inputClass} col-span-3`} placeholder="Plaats" value={addr.plaats} onChange={(e) => upd({ plaats: e.target.value })} />
+              </div>
+            );
+          })()}
         </Field>
         <div className="flex gap-3 mb-3">
           <button onClick={reGeocode} className="h-9 px-3 rounded-lg bg-[rgba(255,255,255,0.06)] ring-1 ring-[rgba(255,255,255,0.15)] text-white text-[12px] hover:bg-[rgba(255,255,255,0.12)] cursor-pointer">Geocode adres</button>
@@ -170,13 +236,33 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
       <Section title="Omgeving">
         <div className="grid grid-cols-2 gap-4">
           <Field label="Omgevingstype">
-            <select className={inputClass} value={form.omgevingType} onChange={(e) => set('omgevingType', e.target.value as OmgevingType)}>
-              <option value="centrum">Centrum</option>
-              <option value="winkelstraat">Winkelstraat</option>
-              <option value="park">Park</option>
-              <option value="plein">Plein</option>
-              <option value="stationsplein">Stationsplein</option>
-            </select>
+            {(() => {
+              const isCustom = !OMGEVING_PRESETS.some((p) => p.key === form.omgevingType);
+              return (
+                <>
+                  <select
+                    className={inputClass}
+                    value={isCustom ? '__anders__' : form.omgevingType}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      set('omgevingType', (v === '__anders__' ? '' : v) as OmgevingType);
+                    }}
+                  >
+                    {OMGEVING_PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+                    <option value="__anders__">Andere…</option>
+                  </select>
+                  {isCustom && (
+                    <input
+                      className={`${inputClass} mt-2`}
+                      placeholder="Beschrijf het omgevingstype"
+                      value={form.omgevingType}
+                      onChange={(e) => set('omgevingType', e.target.value as OmgevingType)}
+                      autoFocus
+                    />
+                  )}
+                </>
+              );
+            })()}
           </Field>
           <Field label="Oriëntatie">
             <select className={inputClass} value={form.orientatie} onChange={(e) => set('orientatie', e.target.value as Orientatie)}>
@@ -214,9 +300,10 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
           <Field label="Link waar vergunning aan te vragen"><input className={inputClass} value={form.vergunningLink ?? ''} onChange={(e) => set('vergunningLink', e.target.value || null)} placeholder="https://..." /></Field>
         )}
         <Field label="Eigendomstype">
-          <div className="flex gap-4">
+          <div className="flex gap-4 flex-wrap">
             <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'particulier'} onChange={() => set('eigendomType', 'particulier')} /> Particulier</label>
             <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'gemeentelijk'} onChange={() => set('eigendomType', 'gemeentelijk')} /> Gemeentelijk</label>
+            <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'bedrijf'} onChange={() => set('eigendomType', 'bedrijf' as any)} /> Bedrijf</label>
           </div>
         </Field>
       </Section>

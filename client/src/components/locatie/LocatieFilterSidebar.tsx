@@ -1,11 +1,27 @@
 import type { Location } from '../../api';
 
+export const M2_BUCKETS: ReadonlyArray<{ key: string; label: string; min: number; max: number | null }> = [
+  { key: '≤10', label: '≤ 10 m²', min: 0, max: 10 },
+  { key: '20', label: '11 – 25 m²', min: 11, max: 25 },
+  { key: '40', label: '26 – 50 m²', min: 26, max: 50 },
+  { key: '80', label: '51 – 100 m²', min: 51, max: 100 },
+  { key: '150', label: '101 – 200 m²', min: 101, max: 200 },
+  { key: '200+', label: '> 200 m²', min: 201, max: null },
+];
+
+export function bucketOf(m2: number): string {
+  for (const b of M2_BUCKETS) {
+    if (m2 >= b.min && (b.max === null || m2 <= b.max)) return b.key;
+  }
+  return M2_BUCKETS[0].key;
+}
+
 export interface LocatieFilters {
   landen: string[];
-  m2Buckets: Array<'≤10' | '20' | '40' | '60+'>;
+  m2Buckets: string[];
   geschiktVoor: Array<'activatie' | 'sampling'>;
   voorzieningen: Array<'stroom' | 'verlichting' | 'vergunning' | 'truck'>;
-  eigendom: Array<'particulier' | 'gemeentelijk'>;
+  eigendom: Array<'particulier' | 'gemeentelijk' | 'bedrijf'>;
 }
 
 export const EMPTY_FILTERS: LocatieFilters = { landen: [], m2Buckets: [], geschiktVoor: [], voorzieningen: [], eigendom: [] };
@@ -19,15 +35,13 @@ export function applyFilters(locations: Location[], f: LocatieFilters, search: s
     }
     if (f.landen.length && !f.landen.includes(loc.land)) return false;
     if (f.m2Buckets.length) {
-      const m2 = loc.m2 ?? 0;
-      const bucket = m2 <= 10 ? '≤10' : m2 <= 25 ? '20' : m2 <= 50 ? '40' : '60+';
-      if (!f.m2Buckets.includes(bucket as any)) return false;
+      if (!f.m2Buckets.includes(bucketOf(loc.m2 ?? 0))) return false;
     }
     if (f.geschiktVoor.includes('activatie') && !loc.geschiktActivatie) return false;
     if (f.geschiktVoor.includes('sampling') && !loc.geschiktSampling) return false;
     if (f.voorzieningen.includes('stroom') && !loc.stroom) return false;
     if (f.voorzieningen.includes('verlichting') && !loc.verlichting) return false;
-    if (f.voorzieningen.includes('vergunning') && !loc.vergunningNodig) return false;
+    if (f.voorzieningen.includes('vergunning') && loc.vergunningNodig) return false;
     if (f.voorzieningen.includes('truck') && !loc.truckBereikbaar) return false;
     if (f.eigendom.length && !f.eigendom.includes(loc.eigendomType)) return false;
     return true;
@@ -42,10 +56,11 @@ interface Props {
   filters: LocatieFilters;
   onChange: (f: LocatieFilters) => void;
   availableLanden: string[];
+  availableM2Buckets: string[];
   resultCount: number;
 }
 
-export default function LocatieFilterSidebar({ filters, onChange, availableLanden, resultCount }: Props) {
+export default function LocatieFilterSidebar({ filters, onChange, availableLanden, availableM2Buckets, resultCount }: Props) {
   const toggle = <K extends keyof LocatieFilters>(key: K, value: LocatieFilters[K][number]) => {
     const current = filters[key] as string[];
     const next = current.includes(value as string) ? current.filter((v) => v !== value) : [...current, value as string];
@@ -81,11 +96,13 @@ export default function LocatieFilterSidebar({ filters, onChange, availableLande
         ))}
       </Section>
 
-      <Section title="Oppervlak">
-        {(['≤10', '20', '40', '60+'] as const).map((b) => (
-          <Check key={b} checked={filters.m2Buckets.includes(b)} onClick={() => toggle('m2Buckets', b)} label={`${b} m²`} />
-        ))}
-      </Section>
+      {availableM2Buckets.length > 0 && (
+        <Section title="Oppervlak">
+          {M2_BUCKETS.filter((b) => availableM2Buckets.includes(b.key)).map((b) => (
+            <Check key={b.key} checked={filters.m2Buckets.includes(b.key)} onClick={() => toggle('m2Buckets', b.key)} label={b.label} />
+          ))}
+        </Section>
+      )}
 
       <Section title="Geschikt voor">
         <Check checked={filters.geschiktVoor.includes('activatie')} onClick={() => toggle('geschiktVoor', 'activatie')} label="Activatie" />
@@ -94,14 +111,15 @@ export default function LocatieFilterSidebar({ filters, onChange, availableLande
 
       <Section title="Voorzieningen">
         <Check checked={filters.voorzieningen.includes('stroom')} onClick={() => toggle('voorzieningen', 'stroom')} label="Stroom aanwezig" />
-        <Check checked={filters.voorzieningen.includes('verlichting')} onClick={() => toggle('voorzieningen', 'verlichting')} label="Verlichting" />
-        <Check checked={filters.voorzieningen.includes('vergunning')} onClick={() => toggle('voorzieningen', 'vergunning')} label="Vergunning nodig" />
+        <Check checked={filters.voorzieningen.includes('verlichting')} onClick={() => toggle('voorzieningen', 'verlichting')} label="Verlichting aanwezig" />
+        <Check checked={filters.voorzieningen.includes('vergunning')} onClick={() => toggle('voorzieningen', 'vergunning')} label="Vergunning vrij" />
         <Check checked={filters.voorzieningen.includes('truck')} onClick={() => toggle('voorzieningen', 'truck')} label="Bakwagen-bereikbaar" />
       </Section>
 
       <Section title="Type">
         <Check checked={filters.eigendom.includes('particulier')} onClick={() => toggle('eigendom', 'particulier')} label="Particulier" />
         <Check checked={filters.eigendom.includes('gemeentelijk')} onClick={() => toggle('eigendom', 'gemeentelijk')} label="Gemeentelijk" />
+        <Check checked={filters.eigendom.includes('bedrijf')} onClick={() => toggle('eigendom', 'bedrijf')} label="Bedrijf" />
       </Section>
     </aside>
   );

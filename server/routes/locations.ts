@@ -6,7 +6,7 @@ import multer from 'multer';
 import sharp from 'sharp';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
-import { geocode } from '../lib/geocode';
+import { geocode, formatAddress } from '../lib/geocode';
 import { uploadsDir } from '../middleware/upload';
 
 const router = Router();
@@ -84,12 +84,14 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   if (!body.adres?.trim()) { res.status(400).json({ error: 'Adres is verplicht' }); return; }
 
   const coords = body.adres ? await geocode(body.adres) : null;
+  // Overschrijf adres met canonical Nominatim-versie indien gevonden; anders user input
+  const canonicalAdres = coords ? formatAddress(coords) || body.adres : body.adres;
 
   const location = await prisma.location.create({
     data: {
       naam: body.naam,
       land: body.land,
-      adres: body.adres,
+      adres: canonicalAdres,
       lat: coords?.lat ?? null,
       lng: coords?.lng ?? null,
       omgevingType: body.omgevingType,
@@ -128,9 +130,10 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   if (!existing) { res.status(404).json({ error: 'Locatie niet gevonden' }); return; }
 
   // Alleen geocoden als adres gewijzigd is
-  let coords: { lat: number; lng: number } | null = null;
+  let coords: Awaited<ReturnType<typeof geocode>> = null;
   const addressChanged = body.adres !== existing.adres;
   if (addressChanged && body.adres) coords = await geocode(body.adres);
+  const canonicalAdres = coords ? formatAddress(coords) || body.adres : body.adres;
 
   const location = await prisma.$transaction(async (tx) => {
     await tx.locationContact.deleteMany({ where: { locationId: id } });
@@ -140,7 +143,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       data: {
         naam: body.naam,
         land: body.land,
-        adres: body.adres,
+        adres: canonicalAdres,
         lat: addressChanged ? coords?.lat ?? null : existing.lat,
         lng: addressChanged ? coords?.lng ?? null : existing.lng,
         omgevingType: body.omgevingType,
@@ -194,11 +197,18 @@ router.post('/:id/geocode', authMiddleware, async (req: AuthRequest, res: Respon
   const existing = await prisma.location.findUnique({ where: { id } });
   if (!existing) { res.status(404).json({ error: 'Locatie niet gevonden' }); return; }
   const coords = existing.adres ? await geocode(existing.adres) : null;
-  // Alleen overschrijven als geocode slaagde — anders bestaande coords behouden
+  // Alleen overschrijven als geocode slaagde — anders bestaande coords + adres behouden
   const updated = coords
-    ? await prisma.location.update({ where: { id }, data: { lat: coords.lat, lng: coords.lng } })
+    ? await prisma.location.update({
+        where: { id },
+        data: {
+          lat: coords.lat,
+          lng: coords.lng,
+          adres: formatAddress(coords) || existing.adres,
+        },
+      })
     : existing;
-  res.json({ lat: updated.lat, lng: updated.lng, found: !!coords });
+  res.json({ lat: updated.lat, lng: updated.lng, adres: updated.adres, found: !!coords });
 });
 
 // POST /api/locations/:id/photos — upload één of meerdere foto's

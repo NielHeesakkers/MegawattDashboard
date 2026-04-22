@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { fetchLocations, Location } from '../../api';
 import LocatieCard from './LocatieCard';
-import LocatieFilterSidebar, { LocatieFilters, EMPTY_FILTERS, applyFilters } from './LocatieFilterSidebar';
+import LocatieFilterSidebar, { LocatieFilters, EMPTY_FILTERS, applyFilters, bucketOf } from './LocatieFilterSidebar';
 
 interface Props {
   onOpenDetail: (id: number | 'new') => void;
@@ -18,6 +18,11 @@ export default function LocatieListPage({ onOpenDetail }: Props) {
   }, []);
 
   const landen = useMemo(() => [...new Set(locations.map((l) => l.land).filter(Boolean))].sort(), [locations]);
+  const availableM2Buckets = useMemo(() => {
+    const seen = new Set<string>();
+    for (const l of locations) if (l.m2 != null) seen.add(bucketOf(l.m2));
+    return [...seen];
+  }, [locations]);
   const filtered = useMemo(() => applyFilters(locations, filters, search), [locations, filters, search]);
 
   return (
@@ -42,7 +47,7 @@ export default function LocatieListPage({ onOpenDetail }: Props) {
       />
 
       <div className="flex gap-6">
-        <LocatieFilterSidebar filters={filters} onChange={setFilters} availableLanden={landen} resultCount={filtered.length} />
+        <LocatieFilterSidebar filters={filters} onChange={setFilters} availableLanden={landen} availableM2Buckets={availableM2Buckets} resultCount={filtered.length} />
 
         <div className="flex-1 min-w-0">
           {loading ? (
