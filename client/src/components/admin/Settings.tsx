@@ -429,6 +429,7 @@ function PasswordStrength({ password }: { password: string }) {
 const AVAILABLE_TABS = [
   { key: 'intern', label: 'Intern' },
   { key: 'planning', label: 'Planning' },
+  { key: 'locatie', label: 'Locatie man' },
 ] as const;
 
 const ALL_TAB_KEYS = AVAILABLE_TABS.map(t => t.key);

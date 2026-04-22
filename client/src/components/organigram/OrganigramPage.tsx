@@ -6,6 +6,7 @@ import MemberModal from './MemberModal';
 import ExecutiveModal from './ExecutiveModal';
 import SearchBar from './SearchBar';
 import KlantteamsView from './KlantteamsView';
+import LocatieManPage from './LocatieManPage';
 import EmailShareModal from './EmailShareModal';
 import { OrganigramSkeleton } from '../ui/Skeleton';
 import KlantenManager from '../admin/KlantenManager';
@@ -23,7 +24,7 @@ function MegawattLogo() {
   );
 }
 
-type ViewMode = 'dashboard' | 'klantteams' | 'planning-projecten' | 'planning-klanten' | 'planning-superchargers';
+type ViewMode = 'dashboard' | 'klantteams' | 'planning-projecten' | 'planning-klanten' | 'planning-superchargers' | 'locatie';
 
 type OrgBranch =
   | { kind: 'team'; team: Team }
@@ -33,7 +34,7 @@ export default function OrganigramPage() {
   const { isAuthenticated, isAdmin, hasTab, allowedTabs, logout, username } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('megawatt-view-mode');
-    if (saved === 'klantteams' || saved === 'planning-projecten' || saved === 'planning-klanten' || saved === 'planning-superchargers') return saved;
+    if (saved === 'klantteams' || saved === 'planning-projecten' || saved === 'planning-klanten' || saved === 'planning-superchargers' || saved === 'locatie') return saved;
     return 'dashboard';
   });
   const [editingProjectId, setEditingProjectId] = useState<number | 'new' | undefined>(undefined);
@@ -46,14 +47,19 @@ export default function OrganigramPage() {
     if (!isAuthenticated) return;
     const isInternView = viewMode === 'dashboard' || viewMode === 'klantteams';
     const isPlanView = viewMode.startsWith('planning-');
+    const isLocatieView = viewMode === 'locatie';
+    const fallback = () => {
+      if (hasTab('intern')) return 'dashboard' as ViewMode;
+      if (hasTab('planning')) return 'planning-klanten' as ViewMode;
+      if (hasTab('locatie')) return 'locatie' as ViewMode;
+      return null;
+    };
     if (isInternView && !hasTab('intern')) {
-      if (hasTab('planning')) {
-        handleViewMode('planning-klanten');
-      }
+      const f = fallback(); if (f) handleViewMode(f);
     } else if (isPlanView && !hasTab('planning')) {
-      if (hasTab('intern')) {
-        handleViewMode('dashboard');
-      }
+      const f = fallback(); if (f) handleViewMode(f);
+    } else if (isLocatieView && !hasTab('locatie')) {
+      const f = fallback(); if (f) handleViewMode(f);
     }
   }, [isAuthenticated, allowedTabs]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -104,6 +110,7 @@ export default function OrganigramPage() {
   const exportRef = useRef<HTMLDivElement>(null);
 
   const isPlanningView = viewMode.startsWith('planning-');
+  const isLocatieView = viewMode === 'locatie';
 
   // Close dropdown menus on outside click
   useEffect(() => {
@@ -378,6 +385,19 @@ export default function OrganigramPage() {
               )}
             </div>
             )}
+            {/* Locatie man tab */}
+            {hasTab('locatie') && (
+              <button
+                onClick={() => handleViewMode('locatie')}
+                className={`flex items-center whitespace-nowrap h-7 px-3 rounded-lg ring-1 ring-[rgba(255,255,255,0.15)] text-[12px] font-medium transition-all duration-150 cursor-pointer ${
+                  viewMode === 'locatie'
+                    ? 'bg-[rgba(255,255,255,0.12)] text-white'
+                    : 'bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white'
+                }`}
+              >
+                Locatie man
+              </button>
+            )}
             <SearchBar value={searchQuery} onChange={setSearchQuery} />
             <div ref={exportRef} className="relative">
               <button
@@ -457,7 +477,9 @@ export default function OrganigramPage() {
       </header>
 
       {/* View content */}
-      {isPlanningView ? (
+      {isLocatieView ? (
+        <LocatieManPage />
+      ) : isPlanningView ? (
         <div className="mx-auto max-w-5xl px-6 py-8">
           {viewMode === 'planning-klanten' ? (
             <KlantenManager />
