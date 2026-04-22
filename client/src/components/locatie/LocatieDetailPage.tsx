@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../ui/Toast';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import {
-  fetchLocation, createLocation, updateLocation, deleteLocation, geocodeLocation,
+  fetchLocation, createLocation, updateLocation, deleteLocation,
   Location, LocationWriteInput, OmgevingType, Orientatie, LocationPhoto,
 } from '../../api';
 import LocatieMap from './LocatieMap';
@@ -33,32 +33,6 @@ const OMGEVING_PRESETS: Array<{ key: string; label: string }> = [
   { key: 'stationsplein', label: 'Stationsplein' },
 ];
 
-interface AddressParts { straat: string; huisnummer: string; postcode: string; plaats: string; }
-
-function parseAddress(adres: string): AddressParts {
-  const parts = adres.split(',').map((s) => s.trim()).filter(Boolean);
-  if (parts.length >= 2) {
-    // Part 1: straat + huisnummer
-    const first = parts[0].match(/^(.+?)\s+(\d+[a-zA-Z\-]*)\s*$/);
-    const straat = first ? first[1] : parts[0];
-    const huisnummer = first ? first[2] : '';
-    // Part 2: postcode (NL/BE/DE patterns) + plaats
-    const second = parts[1].match(/^(\d{4}\s?[A-Z]{0,2}|\d{4,5})\s+(.+)$/i);
-    const postcode = second ? second[1] : '';
-    const plaats = second ? second[2] : parts[1];
-    return { straat, huisnummer, postcode, plaats };
-  }
-  // Fallback: one part, probeer huisnummer achteraan
-  const m = adres.match(/^(.+?)\s+(\d+[a-zA-Z\-]*)\s*$/);
-  if (m) return { straat: m[1], huisnummer: m[2], postcode: '', plaats: '' };
-  return { straat: adres, huisnummer: '', postcode: '', plaats: '' };
-}
-
-function formatAddressParts(p: AddressParts): string {
-  const line1 = [p.straat, p.huisnummer].filter(Boolean).join(' ').trim();
-  const line2 = [p.postcode, p.plaats].filter(Boolean).join(' ').trim();
-  return [line1, line2].filter(Boolean).join(', ');
-}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -115,17 +89,17 @@ function fromLocation(loc: Location): FormState {
 export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCreated }: Props) {
   const toast = useToast();
   const [form, setForm] = useState<FormState>(emptyForm());
-  const [addr, setAddr] = useState<AddressParts>({ straat: '', huisnummer: '', postcode: '', plaats: '' });
   const [originalLocation, setOriginalLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(locationId !== 'new');
   const [saving, setSaving] = useState(false);
+  const [adresSuggestions, setAdresSuggestions] = useState<Array<{ display_name: string; lat: string; lon: string }>>([]);
+  const adresDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (locationId === 'new') return;
     fetchLocation(locationId).then((loc) => {
       setOriginalLocation(loc);
       setForm(fromLocation(loc));
-      setAddr(parseAddress(loc.adres));
     }).finally(() => setLoading(false));
   }, [locationId]);
 
@@ -142,12 +116,26 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
 
-  const updateAddr = (patch: Partial<AddressParts>) => {
-    setAddr((prev) => {
-      const next = { ...prev, ...patch };
-      setForm((f) => ({ ...f, adres: formatAddressParts(next) }));
-      return next;
-    });
+  const searchAdres = (query: string) => {
+    if (adresDebounceRef.current) clearTimeout(adresDebounceRef.current);
+    if (query.trim().length < 3) { setAdresSuggestions([]); return; }
+    adresDebounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`);
+        const data = await res.json();
+        setAdresSuggestions(data);
+      } catch { setAdresSuggestions([]); }
+    }, 300);
+  };
+
+  const handleAdresChange = (value: string) => {
+    setForm((f) => ({ ...f, adres: value, lat: null, lng: null }));
+    searchAdres(value);
+  };
+
+  const selectAdres = (s: { display_name: string; lat: string; lon: string }) => {
+    setForm((f) => ({ ...f, adres: s.display_name, lat: parseFloat(s.lat), lng: parseFloat(s.lon) }));
+    setAdresSuggestions([]);
   };
 
   const onLengteBreedteChange = (lengte: number | null, breedte: number | null) => {
@@ -170,7 +158,6 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
         const updated = await updateLocation(locationId, writeInput);
         setOriginalLocation(updated);
         setForm(fromLocation(updated));
-        setAddr(parseAddress(updated.adres));
         toast.success('Wijzigingen opgeslagen');
       }
     } catch (e: any) {
@@ -188,17 +175,6 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
     onDeleted();
   };
 
-  const reGeocode = async () => {
-    if (locationId === 'new') { toast.error('Sla eerst op voordat je kunt geocoden'); return; }
-    const result = await geocodeLocation(locationId);
-    setForm((f) => ({ ...f, lat: result.lat, lng: result.lng, adres: result.found ? result.adres : f.adres }));
-    if (result.found) {
-      setAddr(parseAddress(result.adres));
-      toast.success('Adres en coördinaten bijgewerkt');
-    } else {
-      toast.error('Adres niet gevonden');
-    }
-  };
 
   if (loading) return <div className="p-8 text-[rgba(255,255,255,0.5)]">Laden…</div>;
 
@@ -232,16 +208,31 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
           </Field>
         </div>
         <Field label="Adres">
-          <div className="grid grid-cols-12 gap-2">
-            <input className={`${inputClass} col-span-5`} placeholder="Straat" value={addr.straat} onChange={(e) => updateAddr({ straat: e.target.value })} />
-            <input className={`${inputClass} col-span-2`} placeholder="Nr." value={addr.huisnummer} onChange={(e) => updateAddr({ huisnummer: e.target.value })} />
-            <input className={`${inputClass} col-span-2`} placeholder="Postcode" value={addr.postcode} onChange={(e) => updateAddr({ postcode: e.target.value })} />
-            <input className={`${inputClass} col-span-3`} placeholder="Plaats" value={addr.plaats} onChange={(e) => updateAddr({ plaats: e.target.value })} />
+          <div className="relative">
+            <input
+              className={inputClass}
+              placeholder="Zoek adres…"
+              value={form.adres}
+              onChange={(e) => handleAdresChange(e.target.value)}
+              onBlur={() => setTimeout(() => setAdresSuggestions([]), 200)}
+            />
+            {adresSuggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-bg-surface ring-1 ring-[rgba(255,255,255,0.12)] rounded-lg shadow-xl z-10 max-h-60 overflow-y-auto">
+                {adresSuggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => selectAdres(s)}
+                    className="w-full px-3 py-2 text-left text-white text-[13px] hover:bg-[rgba(255,255,255,0.08)] cursor-pointer truncate"
+                  >
+                    {s.display_name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </Field>
-        <div className="flex gap-3 mb-3">
-          <button onClick={reGeocode} className="h-9 px-3 rounded-lg bg-[rgba(255,255,255,0.06)] ring-1 ring-[rgba(255,255,255,0.15)] text-white text-[12px] hover:bg-[rgba(255,255,255,0.12)] cursor-pointer">Geocode adres</button>
-        </div>
         <LocatieMap lat={form.lat} lng={form.lng} address={form.adres} />
       </Section>
 
