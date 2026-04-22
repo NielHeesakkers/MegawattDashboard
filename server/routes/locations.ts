@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import multer from 'multer';
+import sharp from 'sharp';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
 import { geocode } from '../lib/geocode';
@@ -9,6 +11,18 @@ import { uploadsDir } from '../middleware/upload';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Alleen afbeeldingen toegestaan'));
+    }
+  },
+});
 
 // GET /api/locations — lijst met relaties
 router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {
@@ -185,6 +199,87 @@ router.post('/:id/geocode', authMiddleware, async (req: AuthRequest, res: Respon
     ? await prisma.location.update({ where: { id }, data: { lat: coords.lat, lng: coords.lng } })
     : existing;
   res.json({ lat: updated.lat, lng: updated.lng, found: !!coords });
+});
+
+// POST /api/locations/:id/photos — upload één of meerdere foto's
+router.post('/:id/photos', authMiddleware, photoUpload.array('photos', 20), async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  const location = await prisma.location.findUnique({ where: { id }, include: { photos: true } });
+  if (!location) { res.status(404).json({ error: 'Locatie niet gevonden' }); return; }
+
+  const files = (req.files as Express.Multer.File[]) ?? [];
+  if (!files.length) { res.status(400).json({ error: 'Geen bestanden' }); return; }
+
+  const photoDir = path.join(uploadsDir, 'Locaties', String(id));
+  fs.mkdirSync(photoDir, { recursive: true });
+
+  let order = location.photos.length;
+  const hasMain = location.photos.some((p) => p.isMain);
+  const saved: Awaited<ReturnType<typeof prisma.locationPhoto.create>>[] = [];
+  for (const file of files) {
+    const photo = await prisma.locationPhoto.create({
+      data: {
+        locationId: id,
+        filename: 'pending',
+        isMain: !hasMain && saved.length === 0,
+        order: order++,
+      },
+    });
+    const filename = `${photo.id}.jpg`;
+    const outPath = path.join(photoDir, filename);
+    await sharp(file.buffer).rotate().resize({ width: 1600, withoutEnlargement: true }).jpeg({ quality: 80 }).toFile(outPath);
+    const updated = await prisma.locationPhoto.update({ where: { id: photo.id }, data: { filename } });
+    saved.push(updated);
+  }
+
+  await logAudit('CREATE', 'LocationPhoto', id, { count: saved.length }, req.adminUsername);
+  res.status(201).json(saved);
+});
+
+// DELETE /api/locations/:id/photos/:photoId
+router.delete('/:id/photos/:photoId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  const photoId = Number(req.params.photoId);
+  const photo = await prisma.locationPhoto.findFirst({ where: { id: photoId, locationId: id } });
+  if (!photo) { res.status(404).json({ error: 'Foto niet gevonden' }); return; }
+
+  const filePath = path.join(uploadsDir, 'Locaties', String(id), photo.filename);
+  if (fs.existsSync(filePath)) {
+    try { fs.unlinkSync(filePath); } catch (err) { console.error(`[locations] Failed to unlink photo ${photoId}:`, err); }
+  }
+  await prisma.locationPhoto.delete({ where: { id: photoId } });
+
+  // Als hoofdfoto verwijderd, promoveer de eerste remaining
+  if (photo.isMain) {
+    const next = await prisma.locationPhoto.findFirst({ where: { locationId: id }, orderBy: { order: 'asc' } });
+    if (next) await prisma.locationPhoto.update({ where: { id: next.id }, data: { isMain: true } });
+  }
+
+  res.json({ success: true });
+});
+
+// PATCH /api/locations/:id/photos/order — { order: number[] }
+router.patch('/:id/photos/order', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  const order = req.body.order as number[];
+  if (!Array.isArray(order)) { res.status(400).json({ error: 'order moet een array zijn' }); return; }
+  await prisma.$transaction(
+    order.map((photoId, idx) =>
+      prisma.locationPhoto.updateMany({ where: { id: photoId, locationId: id }, data: { order: idx } }),
+    ),
+  );
+  res.json({ success: true });
+});
+
+// PATCH /api/locations/:id/photos/:photoId/main
+router.patch('/:id/photos/:photoId/main', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  const photoId = Number(req.params.photoId);
+  await prisma.$transaction([
+    prisma.locationPhoto.updateMany({ where: { locationId: id }, data: { isMain: false } }),
+    prisma.locationPhoto.updateMany({ where: { id: photoId, locationId: id }, data: { isMain: true } }),
+  ]);
+  res.json({ success: true });
 });
 
 export default router;
