@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useToast } from '../ui/Toast';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import {
   fetchLocation, createLocation, updateLocation, deleteLocation, geocodeLocation,
   Location, LocationWriteInput, OmgevingType, Orientatie, LocationPhoto,
@@ -56,6 +57,19 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted }: Pro
     if (locationId === 'new') return;
     fetchLocation(locationId).then((loc) => { setOriginalLocation(loc); setForm(fromLocation(loc)); }).finally(() => setLoading(false));
   }, [locationId]);
+
+  const isDirty = (() => {
+    if (locationId === 'new') {
+      return !!(form.naam || form.adres || form.contacts.length > 0);
+    }
+    if (!originalLocation) return false;
+    const orig = fromLocation(originalLocation);
+    // Ignore photos + lat/lng (managed separately)
+    const normalize = (s: FormState) => JSON.stringify({ ...s, photos: null, lat: null, lng: null });
+    return normalize(form) !== normalize(orig);
+  })();
+
+  useUnsavedChanges(isDirty);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -127,7 +141,10 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted }: Pro
   return (
     <div className="mx-auto max-w-4xl px-6 py-6">
       <div className="sticky top-0 z-20 -mx-6 px-6 py-3 mb-6 bg-[rgba(15,31,29,0.95)] backdrop-blur border-b border-[rgba(255,255,255,0.08)] flex items-center justify-between">
-        <button onClick={onBack} className="text-accent text-sm hover:opacity-80 cursor-pointer">← Terug</button>
+        <button onClick={() => {
+          if (isDirty && !confirm('Je hebt niet-opgeslagen wijzigingen. Toch terug?')) return;
+          onBack();
+        }} className="text-accent text-sm hover:opacity-80 cursor-pointer">← Terug</button>
         <h1 className="text-white font-semibold truncate">{form.naam || 'Nieuwe locatie'}</h1>
         <div className="flex gap-2">
           {locationId !== 'new' && (
