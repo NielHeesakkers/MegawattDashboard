@@ -162,9 +162,13 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
 
   await prisma.location.delete({ where: { id } });
 
-  // Opruimen van foto-bestanden
+  // Opruimen van foto-bestanden (row is al weg — failures hier mogen de request niet laten falen)
   const photoDir = path.join(uploadsDir, 'Locaties', String(id));
-  if (fs.existsSync(photoDir)) fs.rmSync(photoDir, { recursive: true, force: true });
+  try {
+    if (fs.existsSync(photoDir)) fs.rmSync(photoDir, { recursive: true, force: true });
+  } catch (err) {
+    console.error(`[locations] Failed to remove photo dir for location ${id}:`, err);
+  }
 
   await logAudit('DELETE', 'Location', id, { naam: existing.naam }, req.adminUsername);
   res.json({ success: true });
@@ -176,10 +180,10 @@ router.post('/:id/geocode', authMiddleware, async (req: AuthRequest, res: Respon
   const existing = await prisma.location.findUnique({ where: { id } });
   if (!existing) { res.status(404).json({ error: 'Locatie niet gevonden' }); return; }
   const coords = existing.adres ? await geocode(existing.adres) : null;
-  const updated = await prisma.location.update({
-    where: { id },
-    data: { lat: coords?.lat ?? null, lng: coords?.lng ?? null },
-  });
+  // Alleen overschrijven als geocode slaagde — anders bestaande coords behouden
+  const updated = coords
+    ? await prisma.location.update({ where: { id }, data: { lat: coords.lat, lng: coords.lng } })
+    : existing;
   res.json({ lat: updated.lat, lng: updated.lng, found: !!coords });
 });
 
