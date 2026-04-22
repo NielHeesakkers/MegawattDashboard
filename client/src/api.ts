@@ -233,6 +233,72 @@ export interface Project {
   updatedAt: string;
 }
 
+// Location types
+export interface LocationContact {
+  id: number;
+  locationId: number;
+  naam: string;
+  email: string | null;
+  telefoon: string | null;
+  website: string | null;
+  rol: string | null;
+  order: number;
+}
+
+export interface LocationPhoto {
+  id: number;
+  locationId: number;
+  filename: string;
+  isMain: boolean;
+  order: number;
+  createdAt: string;
+}
+
+export interface LocationCost {
+  id: number;
+  locationId: number;
+  label: string;
+  bedragCents: number;
+  order: number;
+}
+
+export type OmgevingType = 'centrum' | 'winkelstraat' | 'park' | 'plein' | 'stationsplein';
+export type Orientatie = 'N' | 'NO' | 'O' | 'ZO' | 'Z' | 'ZW' | 'W' | 'NW';
+export type EigendomType = 'particulier' | 'gemeentelijk';
+
+export interface Location {
+  id: number;
+  naam: string;
+  land: string;
+  adres: string;
+  lat: number | null;
+  lng: number | null;
+  omgevingType: OmgevingType;
+  orientatie: Orientatie;
+  eigendomType: EigendomType;
+  vergunningNodig: boolean;
+  vergunningLink: string | null;
+  truckBereikbaar: boolean;
+  geschiktActivatie: boolean;
+  geschiktSampling: boolean;
+  stroom: boolean;
+  verlichting: boolean;
+  lengte: number | null;
+  breedte: number | null;
+  m2: number | null;
+  notities: string;
+  createdAt: string;
+  updatedAt: string;
+  contacts: LocationContact[];
+  photos: LocationPhoto[];
+  costs: LocationCost[];
+}
+
+export type LocationWriteInput = Omit<Location, 'id' | 'lat' | 'lng' | 'createdAt' | 'updatedAt' | 'contacts' | 'photos' | 'costs'> & {
+  contacts: Array<Omit<LocationContact, 'id' | 'locationId' | 'order'>>;
+  costs: Array<Omit<LocationCost, 'id' | 'locationId' | 'order'>>;
+};
+
 // Superchargers
 export const fetchSuperchargers = () => api.get<Supercharger[]>('/superchargers').then((r) => r.data);
 export const createSupercharger = (data: FormData) => api.post<Supercharger>('/superchargers', data).then((r) => r.data);
@@ -374,5 +440,54 @@ export const sendTestEmail = (testEmail: string) =>
 
 export const shareViaEmail = (data: { to: string; subject?: string; pdfBase64: string; fileName?: string }) =>
   api.post<{ success: boolean }>('/share-email', data).then((r) => r.data);
+
+// Locations
+export async function fetchLocations(): Promise<Location[]> {
+  const { data } = await api.get('/locations');
+  return data;
+}
+
+export async function fetchLocation(id: number): Promise<Location> {
+  const { data } = await api.get(`/locations/${id}`);
+  return data;
+}
+
+export async function createLocation(input: LocationWriteInput): Promise<Location> {
+  const { data } = await api.post('/locations', input);
+  return data;
+}
+
+export async function updateLocation(id: number, input: LocationWriteInput): Promise<Location> {
+  const { data } = await api.put(`/locations/${id}`, input);
+  return data;
+}
+
+export async function deleteLocation(id: number): Promise<void> {
+  await api.delete(`/locations/${id}`);
+}
+
+export async function geocodeLocation(id: number): Promise<{ lat: number | null; lng: number | null; found: boolean }> {
+  const { data } = await api.post(`/locations/${id}/geocode`);
+  return data;
+}
+
+export async function uploadLocationPhotos(id: number, files: File[]): Promise<LocationPhoto[]> {
+  const form = new FormData();
+  for (const f of files) form.append('photos', f);
+  const { data } = await api.post(`/locations/${id}/photos`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return data;
+}
+
+export async function deleteLocationPhoto(id: number, photoId: number): Promise<void> {
+  await api.delete(`/locations/${id}/photos/${photoId}`);
+}
+
+export async function reorderLocationPhotos(id: number, order: number[]): Promise<void> {
+  await api.patch(`/locations/${id}/photos/order`, { order });
+}
+
+export async function setLocationPhotoMain(id: number, photoId: number): Promise<void> {
+  await api.patch(`/locations/${id}/photos/${photoId}/main`);
+}
 
 export default api;
