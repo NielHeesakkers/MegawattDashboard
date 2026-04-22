@@ -227,7 +227,13 @@ router.post('/:id/photos', authMiddleware, photoUpload.array('photos', 20), asyn
     });
     const filename = `${photo.id}.jpg`;
     const outPath = path.join(photoDir, filename);
-    await sharp(file.buffer).rotate().resize({ width: 1600, withoutEnlargement: true }).jpeg({ quality: 80 }).toFile(outPath);
+    try {
+      await sharp(file.buffer).rotate().resize({ width: 1600, withoutEnlargement: true }).jpeg({ quality: 80 }).toFile(outPath);
+    } catch (err) {
+      // Sharp mislukt — verwijder de placeholder-rij om orphan state te voorkomen
+      await prisma.locationPhoto.delete({ where: { id: photo.id } }).catch(() => {});
+      throw err;
+    }
     const updated = await prisma.locationPhoto.update({ where: { id: photo.id }, data: { filename } });
     saved.push(updated);
   }
@@ -255,6 +261,7 @@ router.delete('/:id/photos/:photoId', authMiddleware, async (req: AuthRequest, r
     if (next) await prisma.locationPhoto.update({ where: { id: next.id }, data: { isMain: true } });
   }
 
+  await logAudit('DELETE', 'LocationPhoto', photoId, { locationId: id, filename: photo.filename }, req.adminUsername);
   res.json({ success: true });
 });
 
@@ -268,6 +275,7 @@ router.patch('/:id/photos/order', authMiddleware, async (req: AuthRequest, res: 
       prisma.locationPhoto.updateMany({ where: { id: photoId, locationId: id }, data: { order: idx } }),
     ),
   );
+  await logAudit('UPDATE', 'LocationPhoto', id, { action: 'reorder', count: order.length }, req.adminUsername);
   res.json({ success: true });
 });
 
@@ -275,10 +283,13 @@ router.patch('/:id/photos/order', authMiddleware, async (req: AuthRequest, res: 
 router.patch('/:id/photos/:photoId/main', authMiddleware, async (req: AuthRequest, res: Response) => {
   const id = Number(req.params.id);
   const photoId = Number(req.params.photoId);
+  const exists = await prisma.locationPhoto.findFirst({ where: { id: photoId, locationId: id } });
+  if (!exists) { res.status(404).json({ error: 'Foto niet gevonden' }); return; }
   await prisma.$transaction([
     prisma.locationPhoto.updateMany({ where: { locationId: id }, data: { isMain: false } }),
     prisma.locationPhoto.updateMany({ where: { id: photoId, locationId: id }, data: { isMain: true } }),
   ]);
+  await logAudit('UPDATE', 'LocationPhoto', photoId, { locationId: id, action: 'set-main' }, req.adminUsername);
   res.json({ success: true });
 });
 
