@@ -5,6 +5,8 @@ import {
   Location, LocationWriteInput, OmgevingType, Orientatie,
 } from '../../api';
 import LocatieMap from './LocatieMap';
+import LocatieContactsSection from './LocatieContactsSection';
+import LocatieCostsSection from './LocatieCostsSection';
 
 interface Props { locationId: number | 'new'; onBack: () => void; onDeleted: () => void; }
 
@@ -206,8 +208,16 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted }: Pro
         <textarea className={areaClass} rows={5} value={form.notities} onChange={(e) => set('notities', e.target.value)} placeholder="Vrije tekst…" />
       </Section>
 
+      <Section title="Contactpersonen">
+        <LocatieContactsSection contacts={form.contacts} onChange={(contacts) => set('contacts', contacts)} />
+      </Section>
+
+      <Section title="Kosten">
+        <LocatieCostsSection costs={form.costs} onChange={(costs) => set('costs', costs)} />
+      </Section>
+
       {locationId !== 'new' && originalLocation && (
-        <p className="text-[11px] text-[rgba(255,255,255,0.3)]">Contactpersonen, kosten en foto's komen in Task 16-18.</p>
+        <p className="text-[11px] text-[rgba(255,255,255,0.3)]">Foto's komen in Task 18.</p>
       )}
     </div>
   );
