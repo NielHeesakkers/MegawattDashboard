@@ -193,3 +193,69 @@ model ActivationStaff {
   @@index([activationId])
   @@index([superchargerId])
 }
+
+model Location {
+  id                Int      @id @default(autoincrement())
+  naam              String
+  land              String
+  adres             String
+  lat               Float?
+  lng               Float?
+  omgevingType      String   @default("centrum")
+  orientatie        String   @default("N")
+  eigendomType      String   @default("particulier")
+  vergunningNodig   Boolean  @default(false)
+  vergunningLink    String?
+  truckBereikbaar   Boolean  @default(false)
+  geschiktActivatie Boolean  @default(false)
+  geschiktSampling  Boolean  @default(false)
+  stroom            Boolean  @default(false)
+  verlichting       Boolean  @default(false)
+  lengte            Float?
+  breedte           Float?
+  m2                Float?
+  notities          String   @default("")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  contacts LocationContact[]
+  photos   LocationPhoto[]
+  costs    LocationCost[]
+}
+
+model LocationContact {
+  id         Int      @id @default(autoincrement())
+  locationId Int
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  naam       String
+  email      String?
+  telefoon   String?
+  website    String?
+  rol        String?
+  order      Int
+
+  @@index([locationId])
+}
+
+model LocationPhoto {
+  id         Int      @id @default(autoincrement())
+  locationId Int
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  filename   String
+  isMain     Boolean  @default(false)
+  order      Int
+  createdAt  DateTime @default(now())
+
+  @@index([locationId])
+}
+
+model LocationCost {
+  id          Int      @id @default(autoincrement())
+  locationId  Int
+  location    Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  label       String   @default("Locatiehuur")
+  bedragCents Int      @default(0)
+  order       Int
+
+  @@index([locationId])
+}
