@@ -21,7 +21,7 @@ export default function LocatieCard({ location, onClick }: Props) {
   if (location.vergunningNodig) chips.push('Vergunning');
   if (location.truckBereikbaar) chips.push('Bakwagen');
   if (location.eigendomType === 'particulier') chips.push('Particulier');
-  else chips.push('Gemeentelijk');
+  else if (location.eigendomType === 'gemeentelijk') chips.push('Gemeentelijk');
 
   return (
     <button
@@ -31,7 +31,7 @@ export default function LocatieCard({ location, onClick }: Props) {
     >
       <div className="w-[130px] h-[130px] flex-shrink-0 bg-[rgba(255,255,255,0.05)]">
         {mainPhoto ? (
-          <img src={`/uploads/Locaties/${location.id}/${mainPhoto.filename}`} alt={location.naam} className="w-full h-full object-cover" />
+          <img src={`/uploads/Locaties/${location.id}/${encodeURIComponent(mainPhoto.filename)}`} alt={location.naam || 'Locatie'} loading="lazy" decoding="async" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-[rgba(255,255,255,0.2)]">
             <svg className="w-10 h-10" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
