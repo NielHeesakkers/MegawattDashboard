@@ -6,7 +6,8 @@ import MemberModal from './MemberModal';
 import ExecutiveModal from './ExecutiveModal';
 import SearchBar from './SearchBar';
 import KlantteamsView from './KlantteamsView';
-import LocatieManPage from './LocatieManPage';
+import LocatieListPage from '../locatie/LocatieListPage';
+import OpdrachtenPlaceholder from '../locatie/OpdrachtenPlaceholder';
 import EmailShareModal from './EmailShareModal';
 import { OrganigramSkeleton } from '../ui/Skeleton';
 import KlantenManager from '../admin/KlantenManager';
@@ -24,7 +25,7 @@ function MegawattLogo() {
   );
 }
 
-type ViewMode = 'dashboard' | 'klantteams' | 'planning-projecten' | 'planning-klanten' | 'planning-superchargers' | 'locatie';
+type ViewMode = 'dashboard' | 'klantteams' | 'planning-projecten' | 'planning-klanten' | 'planning-superchargers' | 'locatie-lijst' | 'locatie-opdrachten';
 
 type OrgBranch =
   | { kind: 'team'; team: Team }
@@ -34,24 +35,26 @@ export default function OrganigramPage() {
   const { isAuthenticated, isAdmin, hasTab, allowedTabs, logout, username } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('megawatt-view-mode');
-    if (saved === 'klantteams' || saved === 'planning-projecten' || saved === 'planning-klanten' || saved === 'planning-superchargers' || saved === 'locatie') return saved;
+    if (saved === 'klantteams' || saved === 'planning-projecten' || saved === 'planning-klanten' || saved === 'planning-superchargers' || saved === 'locatie-lijst' || saved === 'locatie-opdrachten') return saved;
     return 'dashboard';
   });
   const [editingProjectId, setEditingProjectId] = useState<number | 'new' | undefined>(undefined);
+  const [editingLocationId, setEditingLocationId] = useState<number | 'new' | undefined>(undefined);
   const handleViewMode = (mode: ViewMode) => {
     setViewMode(mode);
     setEditingProjectId(undefined);
+    setEditingLocationId(undefined);
     localStorage.setItem('megawatt-view-mode', mode);
   };
   useEffect(() => {
     if (!isAuthenticated) return;
     const isInternView = viewMode === 'dashboard' || viewMode === 'klantteams';
     const isPlanView = viewMode.startsWith('planning-');
-    const isLocatieView = viewMode === 'locatie';
+    const isLocatieView = viewMode === 'locatie-lijst' || viewMode === 'locatie-opdrachten';
     const fallback = () => {
       if (hasTab('intern')) return 'dashboard' as ViewMode;
       if (hasTab('planning')) return 'planning-klanten' as ViewMode;
-      if (hasTab('locatie')) return 'locatie' as ViewMode;
+      if (hasTab('locatie')) return 'locatie-lijst' as ViewMode;
       return null;
     };
     if (isInternView && !hasTab('intern')) {
@@ -106,23 +109,27 @@ export default function OrganigramPage() {
   const [planningMenuOpen, setPlanningMenuOpen] = useState(false);
   const planningMenuRef = useRef<HTMLDivElement>(null);
 
+  const [locatieMenuOpen, setLocatieMenuOpen] = useState(false);
+  const locatieMenuRef = useRef<HTMLDivElement>(null);
+
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
   const isPlanningView = viewMode.startsWith('planning-');
-  const isLocatieView = viewMode === 'locatie';
+  const isLocatieView = viewMode === 'locatie-lijst' || viewMode === 'locatie-opdrachten';
 
   // Close dropdown menus on outside click
   useEffect(() => {
-    if (!exportOpen && !internMenuOpen && !planningMenuOpen) return;
+    if (!exportOpen && !internMenuOpen && !planningMenuOpen && !locatieMenuOpen) return;
     const handler = (e: MouseEvent) => {
       if (exportOpen && exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false);
       if (internMenuOpen && internMenuRef.current && !internMenuRef.current.contains(e.target as Node)) setInternMenuOpen(false);
       if (planningMenuOpen && planningMenuRef.current && !planningMenuRef.current.contains(e.target as Node)) setPlanningMenuOpen(false);
+      if (locatieMenuOpen && locatieMenuRef.current && !locatieMenuRef.current.contains(e.target as Node)) setLocatieMenuOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [exportOpen, internMenuOpen, planningMenuOpen]);
+  }, [exportOpen, internMenuOpen, planningMenuOpen, locatieMenuOpen]);
 
   const captureImage = async () => {
     const activeRef = viewMode === 'klantteams' ? klantteamsCaptureRef : captureRef;
@@ -385,18 +392,49 @@ export default function OrganigramPage() {
               )}
             </div>
             )}
-            {/* Locatie man tab */}
             {hasTab('locatie') && (
-              <button
-                onClick={() => handleViewMode('locatie')}
-                className={`flex items-center whitespace-nowrap h-7 px-3 rounded-lg ring-1 ring-[rgba(255,255,255,0.15)] text-[12px] font-medium transition-all duration-150 cursor-pointer ${
-                  viewMode === 'locatie'
-                    ? 'bg-[rgba(255,255,255,0.12)] text-white'
-                    : 'bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white'
-                }`}
-              >
-                Locatie man
-              </button>
+              <div ref={locatieMenuRef} className="relative">
+                <button
+                  onClick={() => setLocatieMenuOpen(!locatieMenuOpen)}
+                  className={`flex items-center whitespace-nowrap gap-1.5 h-7 px-3 rounded-lg ring-1 ring-[rgba(255,255,255,0.15)] text-[12px] font-medium transition-all duration-150 cursor-pointer ${
+                    locatieMenuOpen || isLocatieView
+                      ? 'bg-[rgba(255,255,255,0.12)] text-white'
+                      : 'bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white'
+                  }`}
+                >
+                  Locatie man
+                  <svg className={`w-3 h-3 transition-transform duration-150 ${locatieMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+                {locatieMenuOpen && (
+                  <div className="absolute top-full right-0 mt-[10px] z-50 w-44 bg-bg-surface rounded-xl ring-1 ring-[rgba(255,255,255,0.12)] shadow-2xl overflow-hidden animate-[slideDown_100ms_ease-out]">
+                    {([
+                      { mode: 'locatie-lijst' as ViewMode, label: 'Locaties' },
+                      { mode: 'locatie-opdrachten' as ViewMode, label: 'Opdrachten' },
+                    ]).map((item, i) => (
+                      <div key={item.mode}>
+                        {i > 0 && <div className="border-t border-[rgba(255,255,255,0.06)]" />}
+                        <button
+                          onClick={() => { handleViewMode(item.mode); setLocatieMenuOpen(false); }}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 text-[13px] transition-colors cursor-pointer ${
+                            viewMode === item.mode
+                              ? 'bg-accent/15 text-accent'
+                              : 'text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.08)] hover:text-white'
+                          }`}
+                        >
+                          {viewMode === item.mode && (
+                            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                            </svg>
+                          )}
+                          <span className={viewMode !== item.mode ? 'ml-[26px]' : ''}>{item.label}</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
             <SearchBar value={searchQuery} onChange={setSearchQuery} />
             <div ref={exportRef} className="relative">
@@ -477,8 +515,10 @@ export default function OrganigramPage() {
       </header>
 
       {/* View content */}
-      {isLocatieView ? (
-        <LocatieManPage />
+      {viewMode === 'locatie-lijst' ? (
+        <LocatieListPage onOpenDetail={(_id) => { /* Task 13 wires this to state */ }} />
+      ) : viewMode === 'locatie-opdrachten' ? (
+        <OpdrachtenPlaceholder />
       ) : isPlanningView ? (
         <div className="mx-auto max-w-5xl px-6 py-8">
           {viewMode === 'planning-klanten' ? (
