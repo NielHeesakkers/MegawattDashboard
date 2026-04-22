@@ -7,6 +7,7 @@ import ExecutiveModal from './ExecutiveModal';
 import SearchBar from './SearchBar';
 import KlantteamsView from './KlantteamsView';
 import LocatieListPage from '../locatie/LocatieListPage';
+import LocatieDetailPage from '../locatie/LocatieDetailPage';
 import OpdrachtenPlaceholder from '../locatie/OpdrachtenPlaceholder';
 import EmailShareModal from './EmailShareModal';
 import { OrganigramSkeleton } from '../ui/Skeleton';
@@ -516,7 +517,15 @@ export default function OrganigramPage() {
 
       {/* View content */}
       {viewMode === 'locatie-lijst' ? (
-        <LocatieListPage onOpenDetail={(_id) => { /* Task 13 wires this to state */ }} />
+        editingLocationId !== undefined ? (
+          <LocatieDetailPage
+            locationId={editingLocationId}
+            onBack={() => setEditingLocationId(undefined)}
+            onDeleted={() => setEditingLocationId(undefined)}
+          />
+        ) : (
+          <LocatieListPage onOpenDetail={(id) => setEditingLocationId(id)} />
+        )
       ) : viewMode === 'locatie-opdrachten' ? (
         <OpdrachtenPlaceholder />
       ) : isPlanningView ? (
