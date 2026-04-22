@@ -63,6 +63,8 @@ interface LocationInput {
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   const body = req.body as LocationInput;
   if (!body.naam?.trim()) { res.status(400).json({ error: 'Naam is verplicht' }); return; }
+  if (!body.land?.trim()) { res.status(400).json({ error: 'Land is verplicht' }); return; }
+  if (!body.adres?.trim()) { res.status(400).json({ error: 'Adres is verplicht' }); return; }
 
   const coords = body.adres ? await geocode(body.adres) : null;
 
