@@ -119,14 +119,28 @@ model Setting {
 }
 
 model Klant {
-  id            Int       @id @default(autoincrement())
-  name          String    @unique
+  id            Int            @id @default(autoincrement())
+  name          String         @unique
   contactPerson String?
   email         String?
   logo          String?
+  contacts      KlantContact[]
   projects      Project[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  locProjects   LocProject[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model KlantContact {
+  id       Int    @id @default(autoincrement())
+  klantId  Int
+  klant    Klant  @relation(fields: [klantId], references: [id], onDelete: Cascade)
+  naam     String
+  email    String?
+  telefoon String?
+  order    Int    @default(0)
+
+  @@index([klantId])
 }
 
 model Project {
@@ -196,8 +210,10 @@ model ActivationStaff {
 
 model Location {
   id                Int      @id @default(autoincrement())
+  code              String?  @unique
   naam              String
   land              String
+  stad              String?
   adres             String
   lat               Float?
   lng               Float?
@@ -209,6 +225,7 @@ model Location {
   truckBereikbaar   Boolean  @default(false)
   geschiktActivatie Boolean  @default(false)
   geschiktSampling  Boolean  @default(false)
+  geschiktAnder     String?
   stroom            Boolean  @default(false)
   verlichting       Boolean  @default(false)
   lengte            Float?
@@ -218,9 +235,60 @@ model Location {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  contacts LocationContact[]
-  photos   LocationPhoto[]
-  costs    LocationCost[]
+  contacts     LocationContact[]
+  photos       LocationPhoto[]
+  costs        LocationCost[]
+  locProjects  LocProjectLocation[]
+}
+
+model LocProject {
+  id            Int      @id @default(autoincrement())
+  klantId       Int
+  klant         Klant    @relation(fields: [klantId], references: [id], onDelete: Restrict)
+  projectNumber String   @unique
+  name          String?
+  status        String   @default("starten")
+  contactPerson String?
+  email         String?
+  telefoon      String?
+  notities      String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  locations LocProjectLocation[]
+  contacts  LocProjectContact[]
+
+  @@index([klantId])
+}
+
+model LocProjectContact {
+  id           Int        @id @default(autoincrement())
+  locProjectId Int
+  locProject   LocProject @relation(fields: [locProjectId], references: [id], onDelete: Cascade)
+  naam         String
+  email        String?
+  telefoon     String?
+  order        Int        @default(0)
+
+  @@index([locProjectId])
+}
+
+model LocProjectLocation {
+  id           Int        @id @default(autoincrement())
+  locProjectId Int
+  locProject   LocProject @relation(fields: [locProjectId], references: [id], onDelete: Cascade)
+  locationId   Int
+  location     Location   @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  order        Int        @default(0)
+  startDate    DateTime?
+  endDate      DateTime?
+  available    String     @default("unknown")
+  actionOpen   Boolean    @default(false)
+  actionLabel  String?
+  opmerkingen  String     @default("")
+
+  @@index([locProjectId])
+  @@index([locationId])
 }
 
 model LocationContact {

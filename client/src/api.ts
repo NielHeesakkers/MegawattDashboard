@@ -167,12 +167,22 @@ export interface Client {
   order: number;
 }
 
+export interface KlantContact {
+  id: number;
+  klantId: number;
+  naam: string;
+  email: string | null;
+  telefoon: string | null;
+  order: number;
+}
+
 export interface Klant {
   id: number;
   name: string;
   contactPerson: string | null;
   email: string | null;
   logo: string | null;
+  contacts?: KlantContact[];
   createdAt: string;
   updatedAt: string;
   _count?: { projects: number };
@@ -268,8 +278,10 @@ export type EigendomType = 'particulier' | 'gemeentelijk' | 'bedrijf';
 
 export interface Location {
   id: number;
+  code: string | null;
   naam: string;
   land: string;
+  stad: string | null;
   adres: string;
   lat: number | null;
   lng: number | null;
@@ -281,6 +293,7 @@ export interface Location {
   truckBereikbaar: boolean;
   geschiktActivatie: boolean;
   geschiktSampling: boolean;
+  geschiktAnder: string | null;
   stroom: boolean;
   verlichting: boolean;
   lengte: number | null;
@@ -292,12 +305,83 @@ export interface Location {
   contacts: LocationContact[];
   photos: LocationPhoto[];
   costs: LocationCost[];
+  locProjects?: Array<{
+    id: number;
+    locProjectId: number;
+    locProject: { id: number; projectNumber: string; name: string | null; klant: { id: number; name: string; logo: string | null } };
+  }>;
 }
 
-export type LocationWriteInput = Omit<Location, 'id' | 'lat' | 'lng' | 'createdAt' | 'updatedAt' | 'contacts' | 'photos' | 'costs'> & {
+export type LocationWriteInput = Omit<Location, 'id' | 'code' | 'stad' | 'lat' | 'lng' | 'createdAt' | 'updatedAt' | 'contacts' | 'photos' | 'costs' | 'locProjects'> & {
   contacts: Array<Omit<LocationContact, 'id' | 'locationId' | 'order'>>;
   costs: Array<Omit<LocationCost, 'id' | 'locationId' | 'order'>>;
 };
+
+export type AvailabilityState = 'yes' | 'no' | 'unknown';
+
+export interface LocProjectLocation {
+  id: number;
+  locProjectId: number;
+  locationId: number;
+  order: number;
+  startDate: string | null;
+  endDate: string | null;
+  available: AvailabilityState;
+  actionOpen: boolean;
+  actionLabel: string | null;
+  opmerkingen: string;
+  location?: Location;
+}
+
+export type LocProjectStatus = 'starten' | 'bezig' | 'afgerond';
+
+export interface LocProjectContact {
+  id: number;
+  locProjectId: number;
+  naam: string;
+  email: string | null;
+  telefoon: string | null;
+  order: number;
+}
+
+export interface LocProject {
+  id: number;
+  klantId: number;
+  klant?: { id: number; name: string; logo: string | null };
+  projectNumber: string;
+  name: string | null;
+  status: LocProjectStatus;
+  contactPerson: string | null;
+  email: string | null;
+  telefoon: string | null;
+  contacts?: LocProjectContact[];
+  notities: string;
+  locations?: LocProjectLocation[];
+  createdAt: string;
+  updatedAt: string;
+  _count?: { locations: number };
+}
+
+export interface LocProjectWriteInput {
+  klantId: number;
+  projectNumber: string;
+  name?: string | null;
+  status?: LocProjectStatus;
+  contactPerson?: string | null;
+  email?: string | null;
+  telefoon?: string | null;
+  contacts?: Array<{ naam: string; email?: string | null; telefoon?: string | null }>;
+  notities?: string;
+  locations?: Array<{
+    locationId: number;
+    startDate?: string | null;
+    endDate?: string | null;
+    available?: AvailabilityState;
+    actionOpen?: boolean;
+    actionLabel?: string | null;
+    opmerkingen?: string;
+  }>;
+}
 
 // Superchargers
 export const fetchSuperchargers = () => api.get<Supercharger[]>('/superchargers').then((r) => r.data);
@@ -489,5 +573,17 @@ export async function reorderLocationPhotos(id: number, order: number[]): Promis
 export async function setLocationPhotoMain(id: number, photoId: number): Promise<void> {
   await api.patch(`/locations/${id}/photos/${photoId}/main`);
 }
+
+export async function backfillLocationCodes(): Promise<{ count: number }> {
+  const { data } = await api.post('/locations/backfill-codes');
+  return data;
+}
+
+// LocProjects (locatie-planning projecten, apart van de Planning > Projecten)
+export const fetchLocProjects = () => api.get<LocProject[]>('/loc-projects').then((r) => r.data);
+export const fetchLocProject = (id: number) => api.get<LocProject>(`/loc-projects/${id}`).then((r) => r.data);
+export const createLocProject = (data: LocProjectWriteInput) => api.post<LocProject>('/loc-projects', data).then((r) => r.data);
+export const updateLocProject = (id: number, data: LocProjectWriteInput) => api.put<LocProject>(`/loc-projects/${id}`, data).then((r) => r.data);
+export const deleteLocProject = (id: number) => api.delete(`/loc-projects/${id}`);
 
 export default api;

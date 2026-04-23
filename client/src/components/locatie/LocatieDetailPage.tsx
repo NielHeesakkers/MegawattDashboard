@@ -25,6 +25,22 @@ const EUROPESE_LANDEN_REST = [
   'Vaticaanstad', 'Verenigd Koninkrijk', 'Wit-Rusland', 'Zweden', 'Zwitserland',
 ];
 
+// Nederlandse landnaam → ISO-code voor Nominatim countrycodes-parameter.
+const LAND_ISO: Record<string, string> = {
+  'Nederland': 'nl', 'België': 'be', 'Belgie': 'be', 'Duitsland': 'de',
+  'Albanië': 'al', 'Andorra': 'ad', 'Bosnië en Herzegovina': 'ba', 'Bulgarije': 'bg',
+  'Cyprus': 'cy', 'Denemarken': 'dk', 'Estland': 'ee', 'Finland': 'fi',
+  'Frankrijk': 'fr', 'Griekenland': 'gr', 'Hongarije': 'hu', 'IJsland': 'is',
+  'Ierland': 'ie', 'Italië': 'it', 'Kosovo': 'xk', 'Kroatië': 'hr',
+  'Letland': 'lv', 'Liechtenstein': 'li', 'Litouwen': 'lt', 'Luxemburg': 'lu',
+  'Malta': 'mt', 'Moldavië': 'md', 'Monaco': 'mc', 'Montenegro': 'me',
+  'Noord-Macedonië': 'mk', 'Noorwegen': 'no', 'Oekraïne': 'ua', 'Oostenrijk': 'at',
+  'Polen': 'pl', 'Portugal': 'pt', 'Roemenië': 'ro', 'San Marino': 'sm',
+  'Servië': 'rs', 'Slovenië': 'si', 'Slowakije': 'sk', 'Spanje': 'es',
+  'Tsjechië': 'cz', 'Turkije': 'tr', 'Vaticaanstad': 'va',
+  'Verenigd Koninkrijk': 'gb', 'Wit-Rusland': 'by', 'Zweden': 'se', 'Zwitserland': 'ch',
+};
+
 const OMGEVING_PRESETS: Array<{ key: string; label: string }> = [
   { key: 'centrum', label: 'Centrum' },
   { key: 'winkelstraat', label: 'Winkelstraat' },
@@ -43,9 +59,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <label className="flex flex-col gap-1.5 mb-3">
+    <label className={`flex flex-col gap-1.5 mb-3 ${className}`}>
       <span className="text-[12px] text-[rgba(255,255,255,0.6)]">{label}</span>
       {children}
     </label>
@@ -60,11 +76,11 @@ function emptyForm(): FormState {
     lat: null, lng: null,
     omgevingType: 'centrum', orientatie: 'N', eigendomType: 'particulier',
     vergunningNodig: false, vergunningLink: null, truckBereikbaar: false,
-    geschiktActivatie: false, geschiktSampling: false,
+    geschiktActivatie: false, geschiktSampling: false, geschiktAnder: null,
     stroom: false, verlichting: false,
     lengte: null, breedte: null, m2: null,
     notities: '',
-    contacts: [],
+    contacts: [{ naam: '', email: null, telefoon: null, website: null, rol: null }],
     costs: [{ label: 'Locatiehuur', bedragCents: 0 }],
     photos: [],
   };
@@ -76,11 +92,13 @@ function fromLocation(loc: Location): FormState {
     lat: loc.lat, lng: loc.lng,
     omgevingType: loc.omgevingType, orientatie: loc.orientatie, eigendomType: loc.eigendomType,
     vergunningNodig: loc.vergunningNodig, vergunningLink: loc.vergunningLink, truckBereikbaar: loc.truckBereikbaar,
-    geschiktActivatie: loc.geschiktActivatie, geschiktSampling: loc.geschiktSampling,
+    geschiktActivatie: loc.geschiktActivatie, geschiktSampling: loc.geschiktSampling, geschiktAnder: loc.geschiktAnder,
     stroom: loc.stroom, verlichting: loc.verlichting,
     lengte: loc.lengte, breedte: loc.breedte, m2: loc.m2,
     notities: loc.notities,
-    contacts: loc.contacts.map(({ id: _i, locationId: _l, order: _o, ...rest }) => rest),
+    contacts: loc.contacts.length === 0
+      ? [{ naam: '', email: null, telefoon: null, website: null, rol: null }]
+      : loc.contacts.map(({ id: _i, locationId: _l, order: _o, ...rest }) => rest),
     costs: loc.costs.map(({ id: _i, locationId: _l, order: _o, ...rest }) => rest),
     photos: loc.photos,
   };
@@ -116,12 +134,14 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
 
-  const searchAdres = (query: string) => {
+  const searchAdres = (query: string, land: string) => {
     if (adresDebounceRef.current) clearTimeout(adresDebounceRef.current);
     if (query.trim().length < 3) { setAdresSuggestions([]); return; }
     adresDebounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`);
+        const iso = LAND_ISO[land];
+        const countryParam = iso ? `&countrycodes=${iso}` : '';
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1${countryParam}`);
         const data = await res.json();
         setAdresSuggestions(data);
       } catch { setAdresSuggestions([]); }
@@ -130,7 +150,7 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
 
   const handleAdresChange = (value: string) => {
     setForm((f) => ({ ...f, adres: value, lat: null, lng: null }));
-    searchAdres(value);
+    searchAdres(value, form.land);
   };
 
   const selectAdres = (s: { display_name: string; lat: string; lon: string }) => {
@@ -152,7 +172,7 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
       const { lat: _la, lng: _ln, photos: _ph, ...writeInput } = form;
       if (locationId === 'new') {
         const created = await createLocation(writeInput);
-        toast.success('Locatie opgeslagen');
+        toast.success(`Locatie opgeslagen als ${created.code ?? 'nieuwe locatie'}`);
         onCreated(created.id);
       } else {
         const updated = await updateLocation(locationId, writeInput);
@@ -178,6 +198,8 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
 
   if (loading) return <div className="p-8 text-[rgba(255,255,255,0.5)]">Laden…</div>;
 
+  const locProjects = originalLocation?.locProjects ?? [];
+
   return (
     <div className="mx-auto max-w-4xl px-6 py-6">
       <div className="sticky top-0 z-20 -mx-6 px-6 py-3 mb-6 bg-[rgba(15,31,29,0.95)] backdrop-blur border-b border-[rgba(255,255,255,0.08)] flex items-center justify-between">
@@ -185,7 +207,12 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
           if (isDirty && !confirm('Je hebt niet-opgeslagen wijzigingen. Toch terug?')) return;
           onBack();
         }} className="text-accent text-sm hover:opacity-80 cursor-pointer">← Terug</button>
-        <h1 className="text-white font-semibold truncate">{form.naam || 'Nieuwe locatie'}</h1>
+        <h1 className="text-white font-semibold truncate flex items-center gap-2">
+          {originalLocation?.code && (
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-accent-teal/20 text-accent-teal">{originalLocation.code}</span>
+          )}
+          {form.naam || 'Nieuwe locatie'}
+        </h1>
         <div className="flex gap-2">
           {locationId !== 'new' && (
             <button onClick={del} className="h-9 px-3 rounded-lg bg-red-500/10 ring-1 ring-red-500/20 text-red-400 text-[13px] font-medium hover:bg-red-500/20 cursor-pointer">Verwijderen</button>
@@ -210,8 +237,8 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
         <Field label="Adres">
           <div className="relative">
             <input
-              className={inputClass}
-              placeholder="Zoek adres…"
+              className={`${inputClass} w-full`}
+              placeholder={`Zoek adres in ${form.land}…`}
               value={form.adres}
               onChange={(e) => handleAdresChange(e.target.value)}
               onBlur={() => setTimeout(() => setAdresSuggestions([]), 200)}
@@ -276,12 +303,23 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
       </Section>
 
       <Section title="Geschikt voor">
-        <label className="flex items-center gap-2 text-[14px] text-white mb-2 cursor-pointer">
-          <input type="checkbox" checked={form.geschiktActivatie} onChange={(e) => set('geschiktActivatie', e.target.checked)} /> Activatie
-        </label>
-        <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer">
-          <input type="checkbox" checked={form.geschiktSampling} onChange={(e) => set('geschiktSampling', e.target.checked)} /> Mass sampling
-        </label>
+        <div className="flex items-center gap-6 flex-wrap">
+          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer">
+            <input type="checkbox" checked={form.geschiktActivatie} onChange={(e) => set('geschiktActivatie', e.target.checked)} /> Activatie
+          </label>
+          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer">
+            <input type="checkbox" checked={form.geschiktSampling} onChange={(e) => set('geschiktSampling', e.target.checked)} /> Mass sampling
+          </label>
+          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+            <span className="text-[14px] text-white whitespace-nowrap">Ander:</span>
+            <input
+              className={`${inputClass} flex-1 h-9`}
+              placeholder="bv. Festivals, beurzen…"
+              value={form.geschiktAnder ?? ''}
+              onChange={(e) => set('geschiktAnder', e.target.value || null)}
+            />
+          </div>
+        </div>
       </Section>
 
       <Section title="Afmetingen">
@@ -293,33 +331,36 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
       </Section>
 
       <Section title="Voorzieningen">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="flex items-center gap-8 flex-wrap">
           <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="checkbox" checked={form.stroom} onChange={(e) => set('stroom', e.target.checked)} /> Stroom aanwezig</label>
-          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="checkbox" checked={form.verlichting} onChange={(e) => set('verlichting', e.target.checked)} /> Verlichting</label>
+          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="checkbox" checked={form.verlichting} onChange={(e) => set('verlichting', e.target.checked)} /> Verlichting aanwezig</label>
           <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="checkbox" checked={form.truckBereikbaar} onChange={(e) => set('truckBereikbaar', e.target.checked)} /> Bereikbaar met bakwagen</label>
-          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="checkbox" checked={form.vergunningNodig} onChange={(e) => set('vergunningNodig', e.target.checked)} /> Vergunning nodig</label>
+        </div>
+      </Section>
+
+      <Section title="Eigendomstype">
+        <div className="flex items-center gap-8 flex-wrap">
+          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'particulier'} onChange={() => set('eigendomType', 'particulier')} /> Particulier</label>
+          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'gemeentelijk'} onChange={() => set('eigendomType', 'gemeentelijk')} /> Gemeente</label>
+          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'bedrijf'} onChange={() => set('eigendomType', 'bedrijf')} /> Bedrijf</label>
+        </div>
+      </Section>
+
+      <Section title="Vergunning">
+        <div className="flex items-center gap-8 flex-wrap mb-3">
+          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.vergunningNodig === true} onChange={() => set('vergunningNodig', true)} /> Ja</label>
+          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.vergunningNodig === false} onChange={() => { set('vergunningNodig', false); set('vergunningLink', null); }} /> Nee</label>
         </div>
         {form.vergunningNodig && (
           <Field label="Link waar vergunning aan te vragen"><input className={inputClass} value={form.vergunningLink ?? ''} onChange={(e) => set('vergunningLink', e.target.value || null)} placeholder="https://..." /></Field>
         )}
-        <Field label="Eigendomstype">
-          <div className="flex gap-4 flex-wrap">
-            <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'particulier'} onChange={() => set('eigendomType', 'particulier')} /> Particulier</label>
-            <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'gemeentelijk'} onChange={() => set('eigendomType', 'gemeentelijk')} /> Gemeentelijk</label>
-            <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'bedrijf'} onChange={() => set('eigendomType', 'bedrijf' as any)} /> Bedrijf</label>
-          </div>
-        </Field>
-      </Section>
-
-      <Section title="Notities">
-        <textarea className={areaClass} rows={5} value={form.notities} onChange={(e) => set('notities', e.target.value)} placeholder="Vrije tekst…" />
       </Section>
 
       <Section title="Contactpersonen">
         <LocatieContactsSection contacts={form.contacts} onChange={(contacts) => set('contacts', contacts)} />
       </Section>
 
-      <Section title="Kosten">
+      <Section title="Kosten per dag">
         <LocatieCostsSection costs={form.costs} onChange={(costs) => set('costs', costs)} />
       </Section>
 
@@ -328,6 +369,28 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
           <LocatiePhotoManager locationId={locationId} photos={form.photos} onChange={(photos) => set('photos', photos)} />
         </Section>
       )}
+
+      <Section title="Projecten">
+        {locationId === 'new' ? (
+          <p className="text-[rgba(255,255,255,0.4)] text-[13px] italic">Projecten verschijnen hier nadat de locatie is opgeslagen en aan projecten is gekoppeld.</p>
+        ) : locProjects.length === 0 ? (
+          <p className="text-[rgba(255,255,255,0.4)] text-[13px] italic">Deze locatie is nog niet aan projecten gekoppeld.</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {locProjects.map((lp) => (
+              <li key={lp.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.04)] ring-1 ring-[rgba(255,255,255,0.08)]">
+                <span className="text-[12px] font-mono text-accent-teal">{lp.locProject.projectNumber}</span>
+                <span className="text-white text-[14px]">{lp.locProject.name || '—'}</span>
+                <span className="text-[rgba(255,255,255,0.5)] text-[12px] ml-auto">{lp.locProject.klant.name}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section title="Notities">
+        <textarea className={`${areaClass} w-full`} rows={6} value={form.notities} onChange={(e) => set('notities', e.target.value)} placeholder="Vrije tekst…" />
+      </Section>
     </div>
   );
 }

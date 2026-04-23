@@ -68,7 +68,10 @@ async function saveLogoFile(buffer: Buffer, klantName?: string): Promise<string>
 router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {
   const klanten = await prisma.klant.findMany({
     orderBy: { name: 'asc' },
-    include: { _count: { select: { projects: true } } },
+    include: {
+      contacts: { orderBy: { order: 'asc' } },
+      _count: { select: { projects: true } },
+    },
   });
   res.json(klanten);
 });
@@ -77,7 +80,10 @@ router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   const klant = await prisma.klant.findUnique({
     where: { id: Number(req.params.id) },
-    include: { projects: true },
+    include: {
+      contacts: { orderBy: { order: 'asc' } },
+      projects: true,
+    },
   });
   if (!klant) {
     res.status(404).json({ error: 'Klant niet gevonden' });
@@ -86,6 +92,25 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   res.json(klant);
 });
 
+interface KlantContactInput { naam: string; email?: string | null; telefoon?: string | null }
+
+function parseContacts(raw: unknown): KlantContactInput[] {
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((c: KlantContactInput) => c && (c.naam?.trim() || c.email?.trim() || c.telefoon?.trim()))
+      .map((c: KlantContactInput) => ({
+        naam: (c.naam ?? '').trim(),
+        email: c.email?.trim() || null,
+        telefoon: c.telefoon?.trim() || null,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 // Create klant
 router.post(
   '/',
@@ -93,6 +118,7 @@ router.post(
   upload.single('logo'),
   async (req: AuthRequest, res: Response) => {
     const { name, contactPerson, email } = req.body;
+    const contacts = parseContacts(req.body.contacts);
 
     let logo: string | null = null;
     if (req.file) {
@@ -104,9 +130,16 @@ router.post(
 
     try {
       const klant = await prisma.klant.create({
-        data: { name, contactPerson, email, logo },
+        data: {
+          name,
+          contactPerson: contactPerson || null,
+          email: email || null,
+          logo,
+          contacts: { create: contacts.map((c, i) => ({ ...c, order: i })) },
+        },
+        include: { contacts: { orderBy: { order: 'asc' } } },
       });
-      await logAudit('CREATE', 'Klant', klant.id, { name, contactPerson, email }, req.adminUsername!);
+      await logAudit('CREATE', 'Klant', klant.id, { name, contacts: contacts.length }, req.adminUsername!);
       res.status(201).json(klant);
     } catch (err: unknown) {
       const prismaErr = err as { code?: string };
@@ -133,6 +166,8 @@ router.put(
     }
 
     const { name, contactPerson, email, removeLogo } = req.body;
+    const hasContactsField = req.body.contacts !== undefined;
+    const contacts = parseContacts(req.body.contacts);
 
     let logo: string | null | undefined;
 
@@ -149,16 +184,25 @@ router.put(
     const resolvedLogo = logo !== undefined ? logo : existing.logo;
 
     try {
-      const klant = await prisma.klant.update({
-        where: { id },
-        data: {
-          name: name ?? existing.name,
-          contactPerson: contactPerson !== undefined ? (contactPerson || null) : existing.contactPerson,
-          email: email !== undefined ? (email || null) : existing.email,
-          logo: resolvedLogo,
-        },
+      const klant = await prisma.$transaction(async (tx) => {
+        if (hasContactsField) {
+          await tx.klantContact.deleteMany({ where: { klantId: id } });
+        }
+        return tx.klant.update({
+          where: { id },
+          data: {
+            name: name ?? existing.name,
+            contactPerson: contactPerson !== undefined ? (contactPerson || null) : existing.contactPerson,
+            email: email !== undefined ? (email || null) : existing.email,
+            logo: resolvedLogo,
+            ...(hasContactsField
+              ? { contacts: { create: contacts.map((c, i) => ({ ...c, order: i })) } }
+              : {}),
+          },
+          include: { contacts: { orderBy: { order: 'asc' } } },
+        });
       });
-      await logAudit('UPDATE', 'Klant', klant.id, { name, contactPerson, email }, req.adminUsername!);
+      await logAudit('UPDATE', 'Klant', klant.id, { name, contacts: contacts.length }, req.adminUsername!);
       res.json(klant);
     } catch (err: unknown) {
       const prismaErr = err as { code?: string };

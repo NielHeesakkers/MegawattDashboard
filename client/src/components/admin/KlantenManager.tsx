@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Klant, fetchKlanten, createKlant, updateKlant, deleteKlant } from '../../api';
+import { Klant, KlantContact, fetchKlanten, createKlant, updateKlant, deleteKlant } from '../../api';
 import Modal from '../ui/Modal';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
@@ -7,12 +7,16 @@ import { useToast } from '../ui/Toast';
 type SortKey = 'name' | 'contactPerson' | 'email' | 'projects';
 type SortDir = 'asc' | 'desc';
 
+type ContactRow = { naam: string; email: string; telefoon: string };
+const emptyContact = (): ContactRow => ({ naam: '', email: '', telefoon: '' });
+
 export default function KlantenManager() {
   const toast = useToast();
   const [klanten, setKlanten] = useState<Klant[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: '', contactPerson: '', email: '' });
+  const [form, setForm] = useState({ name: '' });
+  const [contacts, setContacts] = useState<ContactRow[]>([emptyContact()]);
   const [deletingKlant, setDeletingKlant] = useState<Klant | null>(null);
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -32,7 +36,8 @@ export default function KlantenManager() {
   useEffect(() => { load(); }, []);
 
   const openCreate = () => {
-    setForm({ name: '', contactPerson: '', email: '' });
+    setForm({ name: '' });
+    setContacts([emptyContact()]);
     setEditingId(null);
     setLogoFile(null);
     setLogoPreview(null);
@@ -41,17 +46,29 @@ export default function KlantenManager() {
   };
 
   const openEdit = (klant: Klant) => {
-    setForm({
-      name: klant.name,
-      contactPerson: klant.contactPerson || '',
-      email: klant.email || '',
-    });
+    setForm({ name: klant.name });
+    const existing: ContactRow[] = (klant.contacts ?? []).map((c: KlantContact) => ({
+      naam: c.naam, email: c.email ?? '', telefoon: c.telefoon ?? '',
+    }));
+    if (existing.length === 0) {
+      existing.push({
+        naam: klant.contactPerson ?? '',
+        email: klant.email ?? '',
+        telefoon: '',
+      });
+    }
+    setContacts(existing);
     setEditingId(klant.id);
     setLogoFile(null);
     setLogoPreview(klant.logo || null);
     setRemoveLogo(false);
     setShowForm(true);
   };
+
+  const addContact = () => setContacts([...contacts, emptyContact()]);
+  const removeContact = (idx: number) => setContacts(contacts.filter((_, i) => i !== idx));
+  const updContact = (idx: number, patch: Partial<ContactRow>) =>
+    setContacts(contacts.map((c, i) => i === idx ? { ...c, ...patch } : c));
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,8 +85,11 @@ export default function KlantenManager() {
     try {
       const fd = new FormData();
       fd.append('name', form.name);
-      fd.append('contactPerson', form.contactPerson);
-      fd.append('email', form.email);
+      // Legacy velden blijven sync met de eerste contact voor zoek-compatibiliteit
+      fd.append('contactPerson', contacts[0]?.naam || '');
+      fd.append('email', contacts[0]?.email || '');
+      const filteredContacts = contacts.filter((c) => c.naam.trim() || c.email.trim() || c.telefoon.trim());
+      fd.append('contacts', JSON.stringify(filteredContacts));
       if (logoFile) fd.append('logo', logoFile);
       if (removeLogo) fd.append('removeLogo', 'true');
 
@@ -259,29 +279,59 @@ export default function KlantenManager() {
             </div>
             <div className="flex-1 space-y-3">
               <div>
-                <label className="block text-text-secondary text-sm mb-1">Naam *</label>
+                <label className="block text-text-secondary text-sm mb-1">Klantnaam *</label>
                 <input
                   type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-teal"
                   required
                 />
               </div>
-              <div>
-                <label className="block text-text-secondary text-sm mb-1">Contactpersoon</label>
-                <input
-                  type="text" value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-teal"
-                />
-              </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-text-secondary text-sm mb-1">Email</label>
-            <input
-              type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-teal"
-            />
+            <label className="block text-text-secondary text-sm mb-2">Contactpersonen</label>
+            <div className="space-y-2">
+              {contacts.map((c, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2">
+                  <input
+                    type="text" placeholder="Contactpersoon"
+                    value={c.naam}
+                    onChange={(e) => updContact(i, { naam: e.target.value })}
+                    className="col-span-4 px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white text-sm focus:outline-none focus:border-accent-teal"
+                  />
+                  <input
+                    type="email" placeholder="Email"
+                    value={c.email}
+                    onChange={(e) => updContact(i, { email: e.target.value })}
+                    className="col-span-4 px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white text-sm focus:outline-none focus:border-accent-teal"
+                  />
+                  <input
+                    type="tel" placeholder="Telefoon"
+                    value={c.telefoon}
+                    onChange={(e) => updContact(i, { telefoon: e.target.value })}
+                    className="col-span-3 px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white text-sm focus:outline-none focus:border-accent-teal"
+                  />
+                  {i === 0 ? (
+                    <div className="col-span-1" />
+                  ) : (
+                    <button
+                      type="button" onClick={() => removeContact(i)}
+                      className="col-span-1 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm cursor-pointer"
+                      title="Verwijderen"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button" onClick={addContact}
+              className="mt-2 px-3 py-1.5 rounded-lg bg-white/5 text-text-secondary text-xs hover:bg-white/10 cursor-pointer"
+            >
+              + Contactpersoon toevoegen
+            </button>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

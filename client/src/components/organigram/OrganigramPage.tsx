@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { fetchTeams, fetchExecutives, Team, Executive, Member } from '../../api';
 import { ExecutiveCard, matchesSearch } from './ExecutiveSection';
 import TeamColumn from './TeamColumn';
@@ -8,7 +9,8 @@ import SearchBar from './SearchBar';
 import KlantteamsView from './KlantteamsView';
 import LocatieListPage from '../locatie/LocatieListPage';
 import LocatieDetailPage from '../locatie/LocatieDetailPage';
-import OpdrachtenPlaceholder from '../locatie/OpdrachtenPlaceholder';
+import LocProjectList from '../locatie/LocProjectList';
+import LocProjectForm from '../locatie/LocProjectForm';
 import EmailShareModal from './EmailShareModal';
 import { OrganigramSkeleton } from '../ui/Skeleton';
 import KlantenManager from '../admin/KlantenManager';
@@ -26,45 +28,93 @@ function MegawattLogo() {
   );
 }
 
-type ViewMode = 'dashboard' | 'klantteams' | 'planning-projecten' | 'planning-klanten' | 'planning-superchargers' | 'locatie-lijst' | 'locatie-opdrachten';
+type ViewMode = 'dashboard' | 'klantteams' | 'klanten' | 'planning-projecten' | 'planning-klanten' | 'planning-superchargers' | 'locatie-lijst' | 'locatie-projecten';
 
 type OrgBranch =
   | { kind: 'team'; team: Team }
   | { kind: 'director'; director: Executive; childTeams: Team[] };
 
+// URL → viewMode mapping zodat elke sectie een eigen route heeft.
+function pathToView(pathname: string): ViewMode {
+  if (pathname === '/' || pathname === '') return 'dashboard';
+  if (pathname.startsWith('/klantteams')) return 'klantteams';
+  if (pathname.startsWith('/klanten')) return 'klanten';
+  if (pathname.startsWith('/planning/projecten')) return 'planning-projecten';
+  if (pathname.startsWith('/planning/superchargers')) return 'planning-superchargers';
+  if (pathname.startsWith('/planning/klanten')) return 'planning-klanten';
+  if (pathname.startsWith('/locatie/projecten')) return 'locatie-projecten';
+  if (pathname.startsWith('/locatie/locaties')) return 'locatie-lijst';
+  return 'dashboard';
+}
+
+function viewToPath(mode: ViewMode): string {
+  switch (mode) {
+    case 'dashboard': return '/';
+    case 'klantteams': return '/klantteams';
+    case 'klanten': return '/klanten';
+    case 'planning-projecten': return '/planning/projecten';
+    case 'planning-klanten': return '/klanten';
+    case 'planning-superchargers': return '/planning/superchargers';
+    case 'locatie-projecten': return '/locatie/projecten';
+    case 'locatie-lijst': return '/locatie/locaties';
+  }
+}
+
+// Parse numeric id param: 'new' → 'new', "42" → 42, anders undefined.
+function parseEditId(raw: string | undefined): number | 'new' | undefined {
+  if (!raw) return undefined;
+  if (raw === 'new') return 'new';
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
 export default function OrganigramPage() {
   const { isAuthenticated, isAdmin, hasTab, allowedTabs, logout, username } = useAuth();
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = localStorage.getItem('megawatt-view-mode');
-    if (saved === 'klantteams' || saved === 'planning-projecten' || saved === 'planning-klanten' || saved === 'planning-superchargers' || saved === 'locatie-lijst' || saved === 'locatie-opdrachten') return saved;
-    return 'dashboard';
-  });
-  const [editingProjectId, setEditingProjectId] = useState<number | 'new' | undefined>(undefined);
-  const [editingLocationId, setEditingLocationId] = useState<number | 'new' | undefined>(() => {
-    const saved = localStorage.getItem('megawatt-editing-location');
-    if (saved === 'new') return 'new';
-    const n = Number(saved);
-    return Number.isFinite(n) && n > 0 ? n : undefined;
-  });
-  useEffect(() => {
-    if (editingLocationId === undefined) localStorage.removeItem('megawatt-editing-location');
-    else localStorage.setItem('megawatt-editing-location', String(editingLocationId));
-  }, [editingLocationId]);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams();
+
+  const viewMode = pathToView(location.pathname);
+  const editingProjectId = location.pathname.startsWith('/planning/projecten/')
+    ? parseEditId(params.projectId ?? (location.pathname.endsWith('/new') ? 'new' : undefined))
+    : undefined;
+  const editingLocProjectId = location.pathname.startsWith('/locatie/projecten/')
+    ? parseEditId(params.locProjectId ?? (location.pathname.endsWith('/new') ? 'new' : undefined))
+    : undefined;
+  const editingLocationId = location.pathname.startsWith('/locatie/locaties/')
+    ? parseEditId(params.locationId ?? (location.pathname.endsWith('/new') ? 'new' : undefined))
+    : undefined;
+
   const handleViewMode = (mode: ViewMode) => {
-    setViewMode(mode);
-    setEditingProjectId(undefined);
-    setEditingLocationId(undefined);
-    localStorage.setItem('megawatt-view-mode', mode);
+    navigate(viewToPath(mode));
   };
+
+  // Eenmalige migratie: oude localStorage-state → nieuwe URL zodat gebruikers op hun laatste pagina belanden.
+  useEffect(() => {
+    if (location.pathname !== '/') return;
+    const saved = localStorage.getItem('megawatt-view-mode');
+    if (!saved) return;
+    localStorage.removeItem('megawatt-view-mode');
+    const legacyLoc = localStorage.getItem('megawatt-editing-location');
+    localStorage.removeItem('megawatt-editing-location');
+    const mode = saved === 'locatie-opdrachten' ? 'locatie-projecten' : saved as ViewMode;
+    if (mode === 'locatie-lijst' && legacyLoc) {
+      navigate(`/locatie/locaties/${legacyLoc === 'new' ? 'new' : legacyLoc}`, { replace: true });
+    } else {
+      const target = viewToPath(mode);
+      if (target !== '/') navigate(target, { replace: true });
+    }
+  }, []);
+
   useEffect(() => {
     if (!isAuthenticated) return;
     const isInternView = viewMode === 'dashboard' || viewMode === 'klantteams';
-    const isPlanView = viewMode.startsWith('planning-');
-    const isLocatieView = viewMode === 'locatie-lijst' || viewMode === 'locatie-opdrachten';
-    const fallback = () => {
-      if (hasTab('intern')) return 'dashboard' as ViewMode;
-      if (hasTab('planning')) return 'planning-klanten' as ViewMode;
-      if (hasTab('locatie')) return 'locatie-lijst' as ViewMode;
+    const isPlanView = viewMode.startsWith('planning-') || viewMode === 'klanten';
+    const isLocatieView = viewMode === 'locatie-lijst' || viewMode === 'locatie-projecten';
+    const fallback = (): ViewMode | null => {
+      if (hasTab('intern')) return 'dashboard';
+      if (hasTab('planning')) return 'klanten';
+      if (hasTab('locatie')) return 'locatie-lijst';
       return null;
     };
     if (isInternView && !hasTab('intern')) {
@@ -74,7 +124,7 @@ export default function OrganigramPage() {
     } else if (isLocatieView && !hasTab('locatie')) {
       const f = fallback(); if (f) handleViewMode(f);
     }
-  }, [isAuthenticated, allowedTabs]);
+  }, [isAuthenticated, allowedTabs, viewMode]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [executives, setExecutives] = useState<Executive[]>([]);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
@@ -126,7 +176,8 @@ export default function OrganigramPage() {
   const exportRef = useRef<HTMLDivElement>(null);
 
   const isPlanningView = viewMode.startsWith('planning-');
-  const isLocatieView = viewMode === 'locatie-lijst' || viewMode === 'locatie-opdrachten';
+  const isLocatieView = viewMode === 'locatie-lijst' || viewMode === 'locatie-projecten';
+  const isKlantenView = viewMode === 'klanten';
 
   // Close dropdown menus on outside click
   useEffect(() => {
@@ -356,6 +407,19 @@ export default function OrganigramPage() {
               )}
             </div>
             )}
+            {/* Klanten — standalone button rechts van Intern */}
+            {hasTab('planning') && (
+              <button
+                onClick={() => handleViewMode('klanten')}
+                className={`flex items-center gap-1.5 h-7 px-3 rounded-lg ring-1 ring-[rgba(255,255,255,0.15)] text-[12px] font-medium transition-all duration-150 cursor-pointer ${
+                  isKlantenView
+                    ? 'bg-[rgba(255,255,255,0.12)] text-white'
+                    : 'bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] hover:text-white'
+                }`}
+              >
+                Klanten
+              </button>
+            )}
             {/* Planning dropdown menu */}
             {hasTab('planning') && (
             <div ref={planningMenuRef} className="relative">
@@ -376,7 +440,6 @@ export default function OrganigramPage() {
                 <div className="absolute top-full right-0 mt-[10px] z-50 w-48 bg-bg-surface rounded-xl ring-1 ring-[rgba(255,255,255,0.12)] shadow-2xl overflow-hidden animate-[slideDown_100ms_ease-out]">
                   {([
                     { mode: 'planning-projecten' as ViewMode, label: 'Projecten' },
-                    { mode: 'planning-klanten' as ViewMode, label: 'Klanten' },
                     { mode: 'planning-superchargers' as ViewMode, label: 'Superchargers' },
                   ]).map((item, i) => (
                     <div key={item.mode}>
@@ -420,8 +483,8 @@ export default function OrganigramPage() {
                 {locatieMenuOpen && (
                   <div className="absolute top-full right-0 mt-[10px] z-50 w-44 bg-bg-surface rounded-xl ring-1 ring-[rgba(255,255,255,0.12)] shadow-2xl overflow-hidden animate-[slideDown_100ms_ease-out]">
                     {([
+                      { mode: 'locatie-projecten' as ViewMode, label: 'Projecten' },
                       { mode: 'locatie-lijst' as ViewMode, label: 'Locaties' },
-                      { mode: 'locatie-opdrachten' as ViewMode, label: 'Opdrachten' },
                     ]).map((item, i) => (
                       <div key={item.mode}>
                         {i > 0 && <div className="border-t border-[rgba(255,255,255,0.06)]" />}
@@ -529,15 +592,32 @@ export default function OrganigramPage() {
         editingLocationId !== undefined ? (
           <LocatieDetailPage
             locationId={editingLocationId}
-            onBack={() => setEditingLocationId(undefined)}
-            onDeleted={() => setEditingLocationId(undefined)}
-            onCreated={(id) => setEditingLocationId(id)}
+            onBack={() => navigate('/locatie/locaties')}
+            onDeleted={() => navigate('/locatie/locaties')}
+            onCreated={(id) => navigate(`/locatie/locaties/${id}`, { replace: true })}
           />
         ) : (
-          <LocatieListPage onOpenDetail={(id) => setEditingLocationId(id)} />
+          <LocatieListPage onOpenDetail={(id) => navigate(`/locatie/locaties/${id}`)} />
         )
-      ) : viewMode === 'locatie-opdrachten' ? (
-        <OpdrachtenPlaceholder />
+      ) : viewMode === 'locatie-projecten' ? (
+        editingLocProjectId !== undefined ? (
+          <LocProjectForm
+            projectId={editingLocProjectId}
+            onBack={() => navigate('/locatie/projecten')}
+            onCreated={(id) => navigate(`/locatie/projecten/${id}`, { replace: true })}
+            onDeleted={() => navigate('/locatie/projecten')}
+            onOpenLocation={(id) => navigate(`/locatie/locaties/${id}`)}
+          />
+        ) : (
+          <LocProjectList
+            onEdit={(id) => navigate(`/locatie/projecten/${id}`)}
+            onNew={() => navigate('/locatie/projecten/new')}
+          />
+        )
+      ) : viewMode === 'klanten' ? (
+        <div className="mx-auto max-w-5xl px-6 py-8">
+          <KlantenManager />
+        </div>
       ) : isPlanningView ? (
         <div className="mx-auto max-w-5xl px-6 py-8">
           {viewMode === 'planning-klanten' ? (
@@ -546,19 +626,19 @@ export default function OrganigramPage() {
             <SuperchargerManager />
           ) : editingProjectId === 'new' ? (
             <ProjectForm
-              onBack={() => setEditingProjectId(undefined)}
-              onCreated={(id: number) => setEditingProjectId(id)}
+              onBack={() => navigate('/planning/projecten')}
+              onCreated={(id: number) => navigate(`/planning/projecten/${id}`, { replace: true })}
             />
           ) : editingProjectId !== undefined ? (
             <ProjectForm
               projectId={editingProjectId}
-              onBack={() => setEditingProjectId(undefined)}
-              onCreated={(id: number) => setEditingProjectId(id)}
+              onBack={() => navigate('/planning/projecten')}
+              onCreated={(id: number) => navigate(`/planning/projecten/${id}`, { replace: true })}
             />
           ) : (
             <ProjectList
-              onEditProject={(id: number) => setEditingProjectId(id)}
-              onNewProject={() => setEditingProjectId('new')}
+              onEditProject={(id: number) => navigate(`/planning/projecten/${id}`)}
+              onNewProject={() => navigate('/planning/projecten/new')}
             />
           )}
         </div>

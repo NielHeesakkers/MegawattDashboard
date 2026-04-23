@@ -24,10 +24,11 @@ export default function LocatieCostsSection({ costs, onChange }: Props) {
             <input className={`${inputClass} col-span-6`} placeholder="Label (bv. Locatiehuur)" value={c.label} onChange={(e) => upd(i, { label: e.target.value })} />
             <div className="col-span-5 relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[rgba(255,255,255,0.4)] text-[13px]">€</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[rgba(255,255,255,0.3)] text-[11px] pointer-events-none">/ dag</span>
               <input
                 type="number"
                 step="0.01"
-                className={`${inputClass} w-full pl-7`}
+                className={`${inputClass} w-full pl-7 pr-12`}
                 placeholder="0,00"
                 value={c.bedragCents === 0 ? '' : (c.bedragCents / 100).toFixed(2)}
                 onChange={(e) => upd(i, { bedragCents: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : 0 })}
@@ -42,7 +43,7 @@ export default function LocatieCostsSection({ costs, onChange }: Props) {
       <div className="flex items-center justify-between mt-3">
         <button onClick={add} type="button" className="h-9 px-3 rounded-lg bg-[rgba(255,255,255,0.06)] ring-1 ring-[rgba(255,255,255,0.15)] text-white text-[12px] hover:bg-[rgba(255,255,255,0.12)] cursor-pointer">+ Kostenpost</button>
         <div className="text-white font-semibold text-[14px]">
-          Totaal: {new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(total / 100)}
+          Totaal per dag: {new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(total / 100)}
         </div>
       </div>
     </div>
