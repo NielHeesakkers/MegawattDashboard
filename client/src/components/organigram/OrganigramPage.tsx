@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { fetchTeams, fetchExecutives, Team, Executive, Member } from '../../api';
 import { ExecutiveCard, matchesSearch } from './ExecutiveSection';
@@ -57,6 +57,7 @@ function viewToPath(mode: ViewMode): string {
     case 'planning-superchargers': return '/planning/superchargers';
     case 'locatie-projecten': return '/locatie/projecten';
     case 'locatie-lijst': return '/locatie/locaties';
+    default: return '/';
   }
 }
 
@@ -85,9 +86,9 @@ export default function OrganigramPage() {
     ? parseEditId(params.locationId ?? (location.pathname.endsWith('/new') ? 'new' : undefined))
     : undefined;
 
-  const handleViewMode = (mode: ViewMode) => {
+  const handleViewMode = useCallback((mode: ViewMode) => {
     navigate(viewToPath(mode));
-  };
+  }, [navigate]);
 
   // Eenmalige migratie: oude localStorage-state → nieuwe URL zodat gebruikers op hun laatste pagina belanden.
   useEffect(() => {
@@ -104,6 +105,7 @@ export default function OrganigramPage() {
       const target = viewToPath(mode);
       if (target !== '/') navigate(target, { replace: true });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

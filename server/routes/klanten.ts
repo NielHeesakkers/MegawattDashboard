@@ -215,17 +215,27 @@ router.put(
   }
 );
 
-// Delete klant (only if no linked projects)
+// Delete klant (only if no linked projecten/loc-projecten)
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   const id = Number(req.params.id);
   const existing = await prisma.klant.findUnique({ where: { id } });
-  const projectCount = await prisma.project.count({ where: { klantId: id } });
-  if (projectCount > 0) {
-    res.status(400).json({ error: 'Kan klant niet verwijderen: er zijn nog projecten gekoppeld' });
+  if (!existing) { res.status(404).json({ error: 'Klant niet gevonden' }); return; }
+
+  const [projectCount, locProjectCount] = await Promise.all([
+    prisma.project.count({ where: { klantId: id } }),
+    prisma.locProject.count({ where: { klantId: id } }),
+  ]);
+  if (projectCount > 0 || locProjectCount > 0) {
+    const parts: string[] = [];
+    if (projectCount > 0) parts.push(`${projectCount} planning-project${projectCount === 1 ? '' : 'en'}`);
+    if (locProjectCount > 0) parts.push(`${locProjectCount} locatie-project${locProjectCount === 1 ? '' : 'en'}`);
+    res.status(400).json({ error: `Kan klant niet verwijderen: er ${parts.length === 1 ? 'is' : 'zijn'} nog ${parts.join(' en ')} gekoppeld` });
     return;
   }
-  if (existing?.logo) deletePhoto(existing.logo);
+
+  // Row-delete eerst, dan pas logo-file weg — zo blijft bij een fout de logo-referentie consistent.
   await prisma.klant.delete({ where: { id } });
+  if (existing.logo) deletePhoto(existing.logo);
   await logAudit('DELETE', 'Klant', id, {}, req.adminUsername!);
   res.json({ success: true });
 });

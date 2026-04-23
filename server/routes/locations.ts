@@ -6,7 +6,7 @@ import multer from 'multer';
 import sharp from 'sharp';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
-import { geocode, formatAddress } from '../lib/geocode';
+import { geocode, formatAddress, suggest } from '../lib/geocode';
 import { generateLocationCode } from '../lib/locationCode';
 import { uploadsDir } from '../middleware/upload';
 
@@ -25,8 +25,20 @@ const photoUpload = multer({
   },
 });
 
-// GET /api/locations — lijst met relaties
-router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {
+// GET /api/locations/suggest — adres-autocomplete via server-side Nominatim queue
+router.get('/suggest', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const q = typeof req.query.q === 'string' ? req.query.q : '';
+  const land = typeof req.query.land === 'string' ? req.query.land : null;
+  const results = await suggest(q, land, 5);
+  res.json(results);
+});
+
+// GET /api/locations — lijst met relaties (optioneel ?limit + ?offset)
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const rawLimit = Number(req.query.limit);
+  const rawOffset = Number(req.query.offset);
+  const take = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 1000) : undefined;
+  const skip = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : undefined;
   const locations = await prisma.location.findMany({
     orderBy: { createdAt: 'desc' },
     include: {
@@ -34,6 +46,8 @@ router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {
       photos: { orderBy: { order: 'asc' } },
       costs: { orderBy: { order: 'asc' } },
     },
+    take,
+    skip,
   });
   res.json(locations);
 });
@@ -95,39 +109,60 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   // Overschrijf adres met canonical Nominatim-versie indien gevonden; anders user input
   const canonicalAdres = coords ? formatAddress(coords) || body.adres : body.adres;
   const stad = coords?.city || null;
-  const code = await generateLocationCode(stad);
 
-  const location = await prisma.location.create({
-    data: {
-      code,
-      naam: body.naam,
-      land: body.land,
-      stad,
-      adres: canonicalAdres,
-      lat: coords?.lat ?? null,
-      lng: coords?.lng ?? null,
-      omgevingType: body.omgevingType,
-      orientatie: body.orientatie,
-      eigendomType: body.eigendomType,
-      vergunningNodig: body.vergunningNodig,
-      vergunningLink: body.vergunningLink ?? null,
-      truckBereikbaar: body.truckBereikbaar,
-      geschiktActivatie: body.geschiktActivatie,
-      geschiktSampling: body.geschiktSampling,
-      geschiktAnder: body.geschiktAnder ?? null,
-      stroom: body.stroom,
-      verlichting: body.verlichting,
-      lengte: body.lengte ?? null,
-      breedte: body.breedte ?? null,
-      m2: body.m2 ?? null,
-      notities: body.notities ?? '',
-      contacts: { create: (body.contacts ?? []).map((c, i) => ({ ...c, order: i })) },
-      costs: { create: (body.costs ?? []).map((c, i) => ({ ...c, order: i })) },
-    },
-    include: { contacts: true, photos: true, costs: true },
-  });
+  // Race-safe create: bij P2002 op `code` (concurrent insert voor zelfde stad) regenereren en opnieuw proberen.
+  let location: Awaited<ReturnType<typeof prisma.location.create>> | null = null;
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const code = await generateLocationCode(stad);
+    try {
+      location = await prisma.location.create({
+        data: {
+          code,
+          naam: body.naam,
+          land: body.land,
+          stad,
+          adres: canonicalAdres,
+          lat: coords?.lat ?? null,
+          lng: coords?.lng ?? null,
+          omgevingType: body.omgevingType,
+          orientatie: body.orientatie,
+          eigendomType: body.eigendomType,
+          vergunningNodig: body.vergunningNodig,
+          vergunningLink: body.vergunningLink ?? null,
+          truckBereikbaar: body.truckBereikbaar,
+          geschiktActivatie: body.geschiktActivatie,
+          geschiktSampling: body.geschiktSampling,
+          geschiktAnder: body.geschiktAnder ?? null,
+          stroom: body.stroom,
+          verlichting: body.verlichting,
+          lengte: body.lengte ?? null,
+          breedte: body.breedte ?? null,
+          m2: body.m2 ?? null,
+          notities: body.notities ?? '',
+          contacts: { create: (body.contacts ?? []).map((c, i) => ({ ...c, order: i })) },
+          costs: { create: (body.costs ?? []).map((c, i) => ({ ...c, order: i })) },
+        },
+        include: { contacts: true, photos: true, costs: true },
+      });
+      break;
+    } catch (err) {
+      lastErr = err;
+      const e = err as { code?: string; meta?: { target?: string[] | string } };
+      const isCodeCollision = e.code === 'P2002' && (
+        Array.isArray(e.meta?.target) ? e.meta.target.includes('code') : e.meta?.target === 'code'
+      );
+      if (!isCodeCollision) throw err;
+      // concurrent insert voor dezelfde stad-prefix — probeer opnieuw met verse seq-nummer
+    }
+  }
+  if (!location) {
+    console.error('[locations] Code collision after 4 attempts', lastErr);
+    res.status(409).json({ error: 'Locatie-code conflict, probeer opnieuw' });
+    return;
+  }
 
-  await logAudit('CREATE', 'Location', location.id, { naam: body.naam, code }, req.adminUsername);
+  await logAudit('CREATE', 'Location', location.id, { naam: body.naam, code: location.code }, req.adminUsername);
   res.status(201).json(location);
 });
 
@@ -187,11 +222,24 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   res.json(location);
 });
 
-// DELETE /api/locations/:id
+// DELETE /api/locations/:id — met ?force=true om cascade door LocProjects te bevestigen
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   const id = Number(req.params.id);
   const existing = await prisma.location.findUnique({ where: { id } });
   if (!existing) { res.status(404).json({ error: 'Locatie niet gevonden' }); return; }
+
+  const force = req.query.force === 'true' || req.query.force === '1';
+  const linked = await prisma.locProjectLocation.findMany({
+    where: { locationId: id },
+    include: { locProject: { select: { id: true, projectNumber: true, name: true } } },
+  });
+  if (linked.length > 0 && !force) {
+    res.status(409).json({
+      error: 'Locatie is gekoppeld aan projecten',
+      projects: linked.map((l) => ({ id: l.locProject.id, projectNumber: l.locProject.projectNumber, name: l.locProject.name })),
+    });
+    return;
+  }
 
   await prisma.location.delete({ where: { id } });
 

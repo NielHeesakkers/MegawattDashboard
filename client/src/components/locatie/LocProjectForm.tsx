@@ -7,6 +7,7 @@ import {
 } from '../../api';
 import { useToast } from '../ui/Toast';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
+import { todayYmd, toDateInput, daysBetween, fmtEur } from './locProjectHelpers';
 
 interface Props {
   projectId: number | 'new';
@@ -55,26 +56,6 @@ function emptyTab(): TabData {
   };
 }
 
-function todayYmd(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function toDateInput(s: string | null): string {
-  if (!s) return '';
-  return s.slice(0, 10);
-}
-
-function daysBetween(start: string, end: string): number {
-  if (!start || !end) return 0;
-  const s = new Date(start), e = new Date(end);
-  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return 0;
-  const diff = Math.floor((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  return diff > 0 ? diff : 0;
-}
-
-function fmtEur(cents: number): string {
-  return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(cents / 100);
-}
 
 function tabColor(t: TabData): string {
   if (t.actionOpen) return 'bg-orange-500/20 ring-orange-500/60 text-orange-200';
@@ -171,7 +152,9 @@ export default function LocProjectForm({ projectId, onBack, onCreated, onDeleted
         primary.push({ naam: k.contactPerson ?? '', email: k.email, telefoon: null });
       }
       setKlantContacts(primary);
-      if (primary.length > 0) {
+      // Auto-fill alleen bij nieuwe projecten — anders maakt dit form dirty direct na load
+      // wanneer het bestaande project een lege primary contact-rij had.
+      if (projectId === 'new' && primary.length > 0) {
         setContacts((prev) => {
           const first = prev[0];
           if (first && (first.naam || first.email || first.telefoon)) return prev;
@@ -313,8 +296,9 @@ export default function LocProjectForm({ projectId, onBack, onCreated, onDeleted
         setProject(updated);
         toast.success('Wijzigingen opgeslagen');
       }
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Opslaan mislukt');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }

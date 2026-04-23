@@ -546,8 +546,13 @@ export async function updateLocation(id: number, input: LocationWriteInput): Pro
   return data;
 }
 
-export async function deleteLocation(id: number): Promise<void> {
-  await api.delete(`/locations/${id}`);
+export interface LocationDeleteConflict {
+  error: string;
+  projects: Array<{ id: number; projectNumber: string; name: string | null }>;
+}
+
+export async function deleteLocation(id: number, force = false): Promise<void> {
+  await api.delete(`/locations/${id}`, { params: force ? { force: 'true' } : undefined });
 }
 
 export async function geocodeLocation(id: number): Promise<{ lat: number | null; lng: number | null; adres: string; found: boolean }> {
@@ -576,6 +581,13 @@ export async function setLocationPhotoMain(id: number, photoId: number): Promise
 
 export async function backfillLocationCodes(): Promise<{ count: number }> {
   const { data } = await api.post('/locations/backfill-codes');
+  return data;
+}
+
+export interface AdresSuggestion { display_name: string; lat: number; lng: number }
+export async function suggestAdres(q: string, land: string): Promise<AdresSuggestion[]> {
+  if (q.trim().length < 3) return [];
+  const { data } = await api.get<AdresSuggestion[]>('/locations/suggest', { params: { q, land } });
   return data;
 }
 

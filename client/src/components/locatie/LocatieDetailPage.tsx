@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../ui/Toast';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import {
-  fetchLocation, createLocation, updateLocation, deleteLocation,
+  fetchLocation, createLocation, updateLocation, deleteLocation, suggestAdres, AdresSuggestion,
   Location, LocationWriteInput, OmgevingType, Orientatie, LocationPhoto,
 } from '../../api';
+import { EUROPESE_LANDEN_PRIO, EUROPESE_LANDEN_REST } from '../../shared/countries';
 import LocatieMap from './LocatieMap';
 import LocatieContactsSection from './LocatieContactsSection';
 import LocatieCostsSection from './LocatieCostsSection';
@@ -15,31 +16,6 @@ interface Props { locationId: number | 'new'; onBack: () => void; onDeleted: () 
 const inputClass = 'h-10 px-3 rounded-lg bg-[rgba(255,255,255,0.04)] ring-1 ring-[rgba(255,255,255,0.08)] text-white text-[14px] placeholder-[rgba(255,255,255,0.3)] focus:outline-none focus:ring-[rgba(255,255,255,0.2)]';
 const areaClass = 'px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.04)] ring-1 ring-[rgba(255,255,255,0.08)] text-white text-[14px] placeholder-[rgba(255,255,255,0.3)] focus:outline-none focus:ring-[rgba(255,255,255,0.2)]';
 
-const EUROPESE_LANDEN_PRIO = ['Nederland', 'België', 'Duitsland'];
-const EUROPESE_LANDEN_REST = [
-  'Albanië', 'Andorra', 'Bosnië en Herzegovina', 'Bulgarije', 'Cyprus', 'Denemarken', 'Estland',
-  'Finland', 'Frankrijk', 'Griekenland', 'Hongarije', 'IJsland', 'Ierland', 'Italië', 'Kosovo',
-  'Kroatië', 'Letland', 'Liechtenstein', 'Litouwen', 'Luxemburg', 'Malta', 'Moldavië', 'Monaco',
-  'Montenegro', 'Noord-Macedonië', 'Noorwegen', 'Oekraïne', 'Oostenrijk', 'Polen', 'Portugal',
-  'Roemenië', 'San Marino', 'Servië', 'Slovenië', 'Slowakije', 'Spanje', 'Tsjechië', 'Turkije',
-  'Vaticaanstad', 'Verenigd Koninkrijk', 'Wit-Rusland', 'Zweden', 'Zwitserland',
-];
-
-// Nederlandse landnaam → ISO-code voor Nominatim countrycodes-parameter.
-const LAND_ISO: Record<string, string> = {
-  'Nederland': 'nl', 'België': 'be', 'Belgie': 'be', 'Duitsland': 'de',
-  'Albanië': 'al', 'Andorra': 'ad', 'Bosnië en Herzegovina': 'ba', 'Bulgarije': 'bg',
-  'Cyprus': 'cy', 'Denemarken': 'dk', 'Estland': 'ee', 'Finland': 'fi',
-  'Frankrijk': 'fr', 'Griekenland': 'gr', 'Hongarije': 'hu', 'IJsland': 'is',
-  'Ierland': 'ie', 'Italië': 'it', 'Kosovo': 'xk', 'Kroatië': 'hr',
-  'Letland': 'lv', 'Liechtenstein': 'li', 'Litouwen': 'lt', 'Luxemburg': 'lu',
-  'Malta': 'mt', 'Moldavië': 'md', 'Monaco': 'mc', 'Montenegro': 'me',
-  'Noord-Macedonië': 'mk', 'Noorwegen': 'no', 'Oekraïne': 'ua', 'Oostenrijk': 'at',
-  'Polen': 'pl', 'Portugal': 'pt', 'Roemenië': 'ro', 'San Marino': 'sm',
-  'Servië': 'rs', 'Slovenië': 'si', 'Slowakije': 'sk', 'Spanje': 'es',
-  'Tsjechië': 'cz', 'Turkije': 'tr', 'Vaticaanstad': 'va',
-  'Verenigd Koninkrijk': 'gb', 'Wit-Rusland': 'by', 'Zweden': 'se', 'Zwitserland': 'ch',
-};
 
 const OMGEVING_PRESETS: Array<{ key: string; label: string }> = [
   { key: 'centrum', label: 'Centrum' },
@@ -110,7 +86,7 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
   const [originalLocation, setOriginalLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(locationId !== 'new');
   const [saving, setSaving] = useState(false);
-  const [adresSuggestions, setAdresSuggestions] = useState<Array<{ display_name: string; lat: string; lon: string }>>([]);
+  const [adresSuggestions, setAdresSuggestions] = useState<AdresSuggestion[]>([]);
   const adresDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -139,10 +115,7 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
     if (query.trim().length < 3) { setAdresSuggestions([]); return; }
     adresDebounceRef.current = setTimeout(async () => {
       try {
-        const iso = LAND_ISO[land];
-        const countryParam = iso ? `&countrycodes=${iso}` : '';
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1${countryParam}`);
-        const data = await res.json();
+        const data = await suggestAdres(query, land);
         setAdresSuggestions(data);
       } catch { setAdresSuggestions([]); }
     }, 300);
@@ -153,8 +126,8 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
     searchAdres(value, form.land);
   };
 
-  const selectAdres = (s: { display_name: string; lat: string; lon: string }) => {
-    setForm((f) => ({ ...f, adres: s.display_name, lat: parseFloat(s.lat), lng: parseFloat(s.lon) }));
+  const selectAdres = (s: AdresSuggestion) => {
+    setForm((f) => ({ ...f, adres: s.display_name, lat: s.lat, lng: s.lng }));
     setAdresSuggestions([]);
   };
 
@@ -180,8 +153,9 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
         setForm(fromLocation(updated));
         toast.success('Wijzigingen opgeslagen');
       }
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Opslaan mislukt');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }
@@ -190,7 +164,23 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
   const del = async () => {
     if (locationId === 'new') return;
     if (!confirm('Weet je zeker dat je deze locatie wilt verwijderen?')) return;
-    await deleteLocation(locationId);
+    try {
+      await deleteLocation(locationId);
+    } catch (e: unknown) {
+      const err = e as { response?: { status?: number; data?: { error?: string; projects?: Array<{ projectNumber: string; name: string | null }> } } };
+      if (err.response?.status === 409 && err.response.data?.projects) {
+        const list = err.response.data.projects
+          .map((p) => `• ${p.projectNumber}${p.name ? ` — ${p.name}` : ''}`)
+          .join('\n');
+        if (!confirm(`Deze locatie is gekoppeld aan:\n\n${list}\n\nBij verwijderen gaan ook de opmerkingen/data in die projecten voor deze locatie verloren. Toch doorgaan?`)) {
+          return;
+        }
+        await deleteLocation(locationId, true);
+      } else {
+        toast.error(err.response?.data?.error || 'Verwijderen mislukt');
+        return;
+      }
+    }
     toast.success('Locatie verwijderd');
     onDeleted();
   };
