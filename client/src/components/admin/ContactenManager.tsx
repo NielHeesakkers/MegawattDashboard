@@ -310,7 +310,7 @@ export default function ContactenManager<T extends ContactEntity>({
                 )}
               </div>
             </div>
-            <div className="flex-1 space-y-3">
+            <div className="flex-1 space-y-3 min-w-0">
               <div>
                 <label className="block text-text-secondary text-sm mb-1">{`${singular[0].toUpperCase()}${singular.slice(1)}naam`} *</label>
                 <input
@@ -319,45 +319,43 @@ export default function ContactenManager<T extends ContactEntity>({
                   required
                 />
               </div>
-            </div>
-          </div>
-
-          {/* Adres */}
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-3">
-            <div>
-              <label className="block text-text-secondary text-sm mb-1">Adres</label>
-              <input
-                type="text" placeholder="Straatnaam + huisnummer"
-                value={form.adres} onChange={(e) => setForm({ ...form, adres: e.target.value })}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-text-secondary text-sm mb-1">Postcode</label>
-              <input
-                type="text" placeholder="1012 AB"
-                value={form.postcode} onChange={(e) => setForm({ ...form, postcode: e.target.value })}
-                className={inputClass}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-text-secondary text-sm mb-1">Plaats</label>
-              <input
-                type="text" placeholder="Amsterdam"
-                value={form.stad} onChange={(e) => setForm({ ...form, stad: e.target.value })}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-text-secondary text-sm mb-1">Land</label>
-              <select value={form.land} onChange={(e) => setForm({ ...form, land: e.target.value })} className={inputClass}>
-                <option value="">— Kies land —</option>
-                {EUROPESE_LANDEN_PRIO.map((l) => <option key={l} value={l}>{l}</option>)}
-                <option disabled>──────────</option>
-                {EUROPESE_LANDEN_REST.map((l) => <option key={l} value={l}>{l}</option>)}
-              </select>
+              <div className="grid grid-cols-[1fr_8ch] gap-3">
+                <div>
+                  <label className="block text-text-secondary text-sm mb-1">Adres</label>
+                  <input
+                    type="text" placeholder="Straatnaam + huisnummer"
+                    value={form.adres} onChange={(e) => setForm({ ...form, adres: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-text-secondary text-sm mb-1">Postcode</label>
+                  <input
+                    type="text" placeholder="1012 AB" maxLength={7}
+                    value={form.postcode} onChange={(e) => setForm({ ...form, postcode: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-text-secondary text-sm mb-1">Plaats</label>
+                  <input
+                    type="text" placeholder="Amsterdam"
+                    value={form.stad} onChange={(e) => setForm({ ...form, stad: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-text-secondary text-sm mb-1">Land</label>
+                  <select value={form.land} onChange={(e) => setForm({ ...form, land: e.target.value })} className={inputClass}>
+                    <option value="">— Kies land —</option>
+                    {EUROPESE_LANDEN_PRIO.map((l) => <option key={l} value={l}>{l}</option>)}
+                    <option disabled>──────────</option>
+                    {EUROPESE_LANDEN_REST.map((l) => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
 
