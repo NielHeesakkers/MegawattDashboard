@@ -182,10 +182,38 @@ export interface Klant {
   contactPerson: string | null;
   email: string | null;
   logo: string | null;
+  adres: string | null;
+  postcode: string | null;
+  stad: string | null;
+  land: string | null;
   contacts?: KlantContact[];
   createdAt: string;
   updatedAt: string;
   _count?: { projects: number };
+}
+
+export interface ToeleverancierContact {
+  id: number;
+  toeleverancierId: number;
+  naam: string;
+  email: string | null;
+  telefoon: string | null;
+  order: number;
+}
+
+export interface Toeleverancier {
+  id: number;
+  name: string;
+  contactPerson: string | null;
+  email: string | null;
+  logo: string | null;
+  adres: string | null;
+  postcode: string | null;
+  stad: string | null;
+  land: string | null;
+  contacts?: ToeleverancierContact[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ActivationStaffMember {
@@ -420,6 +448,13 @@ export const fetchKlant = (id: number) => api.get<Klant>(`/klanten/${id}`).then(
 export const createKlant = (data: FormData) => api.post<Klant>('/klanten', data).then((r) => r.data);
 export const updateKlant = (id: number, data: FormData) => api.put<Klant>(`/klanten/${id}`, data).then((r) => r.data);
 export const deleteKlant = (id: number) => api.delete(`/klanten/${id}`);
+
+// Toeleveranciers (zelfde shape als Klanten, geen project-relaties)
+export const fetchToeleveranciers = () => api.get<Toeleverancier[]>('/toeleveranciers').then((r) => r.data);
+export const fetchToeleverancier = (id: number) => api.get<Toeleverancier>(`/toeleveranciers/${id}`).then((r) => r.data);
+export const createToeleverancier = (data: FormData) => api.post<Toeleverancier>('/toeleveranciers', data).then((r) => r.data);
+export const updateToeleverancier = (id: number, data: FormData) => api.put<Toeleverancier>(`/toeleveranciers/${id}`, data).then((r) => r.data);
+export const deleteToeleverancier = (id: number) => api.delete(`/toeleveranciers/${id}`);
 
 // Projects
 export const fetchProjects = (status?: string) =>

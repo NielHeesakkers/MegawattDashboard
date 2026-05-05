@@ -124,11 +124,42 @@ model Klant {
   contactPerson String?
   email         String?
   logo          String?
+  adres         String?
+  postcode      String?
+  stad          String?
+  land          String?
   contacts      KlantContact[]
   projects      Project[]
   locProjects   LocProject[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+model Toeleverancier {
+  id            Int                     @id @default(autoincrement())
+  name          String                  @unique
+  contactPerson String?
+  email         String?
+  logo          String?
+  adres         String?
+  postcode      String?
+  stad          String?
+  land          String?
+  contacts      ToeleverancierContact[]
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+}
+
+model ToeleverancierContact {
+  id               Int            @id @default(autoincrement())
+  toeleverancierId Int
+  toeleverancier   Toeleverancier @relation(fields: [toeleverancierId], references: [id], onDelete: Cascade)
+  naam             String
+  email            String?
+  telefoon         String?
+  order            Int            @default(0)
+
+  @@index([toeleverancierId])
 }
 
 model KlantContact {

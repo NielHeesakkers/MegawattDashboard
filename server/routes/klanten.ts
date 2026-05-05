@@ -1,68 +1,14 @@
 import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
-import { upload, deletePhoto, uploadsDir } from '../middleware/upload';
+import { upload, deletePhoto } from '../middleware/upload';
 import { logAudit } from '../lib/audit';
-import path from 'path';
-import fs from 'fs';
-import sharp from 'sharp';
+import { saveLogoFile, autoFetchLogo } from '../lib/logo';
 
 const router = Router();
 const prisma = new PrismaClient();
 
 const KLANTEN_SUBDIR = 'Klanten';
-
-/** Try to fetch a usable image buffer from a URL. Returns null if too small or failed. */
-async function tryFetchImage(url: string, minSize = 1000): Promise<Buffer | null> {
-  try {
-    const response = await fetch(url, { redirect: 'follow' });
-    const contentType = response.headers.get('content-type') || '';
-    // Skip non-image responses
-    if (!contentType.startsWith('image/')) return null;
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length < 500) return null;
-    return buffer;
-  } catch {
-    return null;
-  }
-}
-
-/** Try to fetch a logo via Google Favicons. */
-async function autoFetchLogo(name: string): Promise<string | null> {
-  try {
-    const cleaned = name.toLowerCase().replace(/\b(b\.?v\.?|n\.?v\.?|bv|nv|holding|group|groep)\b/gi, '').trim();
-    const slug = cleaned.replace(/\s+/g, '');
-
-    for (const tld of ['.com', '.nl']) {
-      const buffer = await tryFetchImage(`https://www.google.com/s2/favicons?domain=${slug}${tld}&sz=128`);
-      if (buffer) return await saveLogoFile(buffer, name);
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/** Save an uploaded logo buffer to uploads/Klanten/ with white background. */
-async function saveLogoFile(buffer: Buffer, klantName?: string): Promise<string> {
-  const targetDir = path.join(uploadsDir, KLANTEN_SUBDIR);
-  if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
-
-  // Generate a readable filename from klant name, or fallback to timestamp
-  const slug = klantName
-    ? klantName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    : `${Date.now()}`;
-  const filename = `${slug}.jpg`;
-  const outputPath = path.join(targetDir, filename);
-
-  await sharp(buffer)
-    .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
-    .flatten({ background: { r: 255, g: 255, b: 255 } })
-    .jpeg({ quality: 85 })
-    .toFile(outputPath);
-
-  return `/uploads/${KLANTEN_SUBDIR}/${filename}`;
-}
 
 // List all klanten
 router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {
@@ -117,15 +63,15 @@ router.post(
   authMiddleware,
   upload.single('logo'),
   async (req: AuthRequest, res: Response) => {
-    const { name, contactPerson, email } = req.body;
+    const { name, contactPerson, email, adres, postcode, stad, land } = req.body;
     const contacts = parseContacts(req.body.contacts);
 
     let logo: string | null = null;
     if (req.file) {
-      logo = await saveLogoFile(req.file.buffer, name);
+      logo = await saveLogoFile(KLANTEN_SUBDIR, req.file.buffer, name);
     } else {
       // Auto-search logo online
-      logo = await autoFetchLogo(name);
+      logo = await autoFetchLogo(KLANTEN_SUBDIR, name);
     }
 
     try {
@@ -135,6 +81,10 @@ router.post(
           contactPerson: contactPerson || null,
           email: email || null,
           logo,
+          adres: adres || null,
+          postcode: postcode || null,
+          stad: stad || null,
+          land: land || null,
           contacts: { create: contacts.map((c, i) => ({ ...c, order: i })) },
         },
         include: { contacts: { orderBy: { order: 'asc' } } },
@@ -165,7 +115,7 @@ router.put(
       return;
     }
 
-    const { name, contactPerson, email, removeLogo } = req.body;
+    const { name, contactPerson, email, removeLogo, adres, postcode, stad, land } = req.body;
     const hasContactsField = req.body.contacts !== undefined;
     const contacts = parseContacts(req.body.contacts);
 
@@ -174,7 +124,7 @@ router.put(
     if (req.file) {
       // New logo uploaded — delete old one if present
       if (existing.logo) deletePhoto(existing.logo);
-      logo = await saveLogoFile(req.file.buffer, name || existing?.name);
+      logo = await saveLogoFile(KLANTEN_SUBDIR, req.file.buffer, name || existing?.name);
     } else if (removeLogo === 'true') {
       // Explicitly remove logo
       if (existing.logo) deletePhoto(existing.logo);
@@ -195,6 +145,10 @@ router.put(
             contactPerson: contactPerson !== undefined ? (contactPerson || null) : existing.contactPerson,
             email: email !== undefined ? (email || null) : existing.email,
             logo: resolvedLogo,
+            adres: adres !== undefined ? (adres || null) : existing.adres,
+            postcode: postcode !== undefined ? (postcode || null) : existing.postcode,
+            stad: stad !== undefined ? (stad || null) : existing.stad,
+            land: land !== undefined ? (land || null) : existing.land,
             ...(hasContactsField
               ? { contacts: { create: contacts.map((c, i) => ({ ...c, order: i })) } }
               : {}),
@@ -245,7 +199,7 @@ router.post('/refetch-logos', authMiddleware, async (_req: AuthRequest, res: Res
   const klanten = await prisma.klant.findMany({ where: { logo: null } });
   const results: { name: string; found: boolean }[] = [];
   for (const klant of klanten) {
-    const logo = await autoFetchLogo(klant.name);
+    const logo = await autoFetchLogo(KLANTEN_SUBDIR, klant.name);
     if (logo) {
       await prisma.klant.update({ where: { id: klant.id }, data: { logo } });
       results.push({ name: klant.name, found: true });

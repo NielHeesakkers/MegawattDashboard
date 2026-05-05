@@ -31,6 +31,9 @@ export default function App() {
         <Route path="/" element={<OrganigramPage />} />
         <Route path="/klantteams" element={<OrganigramPage />} />
         <Route path="/klanten" element={<OrganigramPage />} />
+        <Route path="/toeleveranciers" element={<OrganigramPage />} />
+        <Route path="/contacten/klanten" element={<OrganigramPage />} />
+        <Route path="/contacten/toeleveranciers" element={<OrganigramPage />} />
         <Route path="/planning/projecten" element={<OrganigramPage />} />
         <Route path="/planning/projecten/new" element={<OrganigramPage />} />
         <Route path="/planning/projecten/:projectId" element={<OrganigramPage />} />
