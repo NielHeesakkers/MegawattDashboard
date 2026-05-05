@@ -8,19 +8,21 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Install dependencies
+# Dependencies apart van source — Docker cachet deze laag zolang package.json niet verandert
 COPY package.json package-lock.json* ./
 RUN npm ci
 
-# Copy source
+# Prisma schema apart — cachet prisma generate zolang schema niet verandert
+COPY prisma/ prisma/
+RUN npx prisma generate
+
+# Broncode
 COPY client/ client/
 COPY server/ server/
-COPY prisma/ prisma/
 COPY tsconfig*.json ./
 
-# Generate Prisma client + build everything
-RUN npx prisma generate && \
-    npx vite build --config client/vite.config.ts && \
+# Build frontend + backend
+RUN npx vite build --config client/vite.config.ts && \
     npx tsc -p tsconfig.server.json
 
 
@@ -53,12 +55,10 @@ RUN chmod +x docker-entrypoint.sh
 # Only persistent DATA volumes (not prisma schema!)
 VOLUME ["/app/data", "/app/uploads"]
 
-# Environment — database lives in /app/data so volume doesn't overwrite prisma schema
 ENV NODE_ENV=production
 ENV PORT=3001
 ENV DATABASE_URL="file:/app/data/dev.db"
 
 EXPOSE 3001
 
-# Start: run migrations, seed if first run, then start server
 CMD ["./docker-entrypoint.sh"]
