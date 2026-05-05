@@ -1,0 +1,22 @@
+services:
+  dashboard:
+    build: .
+    image: mwdashboard-dashboard
+    container_name: megawatt-dashboard
+    restart: unless-stopped
+    ports:
+      - "3003:3001"
+    volumes:
+      - /Users/server/Docker/MW Organigram/uploads:/app/uploads
+      - /Users/server/Docker/MW Organigram/Backups:/app/Backup
+      - /Users/server/Docker/MW Organigram/data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=file:/app/data/dev.db
+      - JWT_SECRET=megawatt-dashboard-secret-2026
+
+networks:
+  default:
+    external: true
+    name: servernet
