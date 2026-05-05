@@ -1,7 +1,6 @@
 services:
   dashboard:
-    build: .
-    image: mwdashboard-dashboard
+    image: ghcr.io/nielheesakkers/megawatt-dashboard:latest
     container_name: megawatt-dashboard
     restart: unless-stopped
     ports:
