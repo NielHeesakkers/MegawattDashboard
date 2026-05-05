@@ -10,19 +10,18 @@ const prisma = new PrismaClient();
 
 const SUBDIR = 'Toeleveranciers';
 
+const INCLUDE = {
+  contacts: { orderBy: { order: 'asc' } },
+  specialismes: { include: { specialisme: true } },
+} as const;
+
 router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {
-  const items = await prisma.toeleverancier.findMany({
-    orderBy: { name: 'asc' },
-    include: { contacts: { orderBy: { order: 'asc' } } },
-  });
+  const items = await prisma.toeleverancier.findMany({ orderBy: { name: 'asc' }, include: INCLUDE });
   res.json(items);
 });
 
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const item = await prisma.toeleverancier.findUnique({
-    where: { id: Number(req.params.id) },
-    include: { contacts: { orderBy: { order: 'asc' } } },
-  });
+  const item = await prisma.toeleverancier.findUnique({ where: { id: Number(req.params.id) }, include: INCLUDE });
   if (!item) { res.status(404).json({ error: 'Toeleverancier niet gevonden' }); return; }
   res.json(item);
 });
@@ -44,9 +43,19 @@ function parseContacts(raw: unknown): ContactInput[] {
   } catch { return []; }
 }
 
+function parseSpecialismeIds(raw: unknown): number[] {
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(Number).filter((n) => !isNaN(n));
+  } catch { return []; }
+}
+
 router.post('/', authMiddleware, upload.single('logo'), async (req: AuthRequest, res: Response) => {
   const { name, contactPerson, email, adres, postcode, stad, land } = req.body;
   const contacts = parseContacts(req.body.contacts);
+  const specialismeIds = parseSpecialismeIds(req.body.specialismeIds);
 
   let logo: string | null = null;
   if (req.file) {
@@ -67,8 +76,9 @@ router.post('/', authMiddleware, upload.single('logo'), async (req: AuthRequest,
         stad: stad || null,
         land: land || null,
         contacts: { create: contacts.map((c, i) => ({ ...c, order: i })) },
+        specialismes: { create: specialismeIds.map((specialismeId) => ({ specialismeId })) },
       },
-      include: { contacts: { orderBy: { order: 'asc' } } },
+      include: INCLUDE,
     });
     await logAudit('CREATE', 'Toeleverancier', item.id, { name }, req.adminUsername!);
     res.status(201).json(item);
@@ -86,7 +96,9 @@ router.put('/:id', authMiddleware, upload.single('logo'), async (req: AuthReques
 
   const { name, contactPerson, email, removeLogo, adres, postcode, stad, land } = req.body;
   const hasContactsField = req.body.contacts !== undefined;
+  const hasSpecialismeField = req.body.specialismeIds !== undefined;
   const contacts = parseContacts(req.body.contacts);
+  const specialismeIds = parseSpecialismeIds(req.body.specialismeIds);
 
   let logo: string | null | undefined;
   if (req.file) {
@@ -103,6 +115,9 @@ router.put('/:id', authMiddleware, upload.single('logo'), async (req: AuthReques
       if (hasContactsField) {
         await tx.toeleverancierContact.deleteMany({ where: { toeleverancierId: id } });
       }
+      if (hasSpecialismeField) {
+        await tx.toeleverancierSpecialisme.deleteMany({ where: { toeleverancierId: id } });
+      }
       return tx.toeleverancier.update({
         where: { id },
         data: {
@@ -117,8 +132,11 @@ router.put('/:id', authMiddleware, upload.single('logo'), async (req: AuthReques
           ...(hasContactsField
             ? { contacts: { create: contacts.map((c, i) => ({ ...c, order: i })) } }
             : {}),
+          ...(hasSpecialismeField
+            ? { specialismes: { create: specialismeIds.map((specialismeId) => ({ specialismeId })) } }
+            : {}),
         },
-        include: { contacts: { orderBy: { order: 'asc' } } },
+        include: INCLUDE,
       });
     });
     await logAudit('UPDATE', 'Toeleverancier', item.id, { name }, req.adminUsername!);

@@ -201,6 +201,17 @@ export interface ToeleverancierContact {
   order: number;
 }
 
+export interface Specialisme {
+  id: number;
+  naam: string;
+}
+
+export interface ToeleverancierSpecialisme {
+  toeleverancierId: number;
+  specialismeId: number;
+  specialisme: Specialisme;
+}
+
 export interface Toeleverancier {
   id: number;
   name: string;
@@ -212,6 +223,7 @@ export interface Toeleverancier {
   stad: string | null;
   land: string | null;
   contacts?: ToeleverancierContact[];
+  specialismes?: ToeleverancierSpecialisme[];
   createdAt: string;
   updatedAt: string;
 }
@@ -455,6 +467,11 @@ export const fetchToeleverancier = (id: number) => api.get<Toeleverancier>(`/toe
 export const createToeleverancier = (data: FormData) => api.post<Toeleverancier>('/toeleveranciers', data).then((r) => r.data);
 export const updateToeleverancier = (id: number, data: FormData) => api.put<Toeleverancier>(`/toeleveranciers/${id}`, data).then((r) => r.data);
 export const deleteToeleverancier = (id: number) => api.delete(`/toeleveranciers/${id}`);
+
+// Specialismes
+export const fetchSpecialismes = () => api.get<Specialisme[]>('/specialismes').then((r) => r.data);
+export const createSpecialisme = (naam: string) => api.post<Specialisme>('/specialismes', { naam }).then((r) => r.data);
+export const deleteSpecialisme = (id: number) => api.delete(`/specialismes/${id}`);
 
 // Projects
 export const fetchProjects = (status?: string) =>

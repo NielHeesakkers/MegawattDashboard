@@ -136,8 +136,8 @@ model Klant {
 }
 
 model Toeleverancier {
-  id            Int                     @id @default(autoincrement())
-  name          String                  @unique
+  id            Int                         @id @default(autoincrement())
+  name          String                      @unique
   contactPerson String?
   email         String?
   logo          String?
@@ -146,8 +146,24 @@ model Toeleverancier {
   stad          String?
   land          String?
   contacts      ToeleverancierContact[]
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
+  specialismes  ToeleverancierSpecialisme[]
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+}
+
+model Specialisme {
+  id              Int                         @id @default(autoincrement())
+  naam            String                      @unique
+  toeleveranciers ToeleverancierSpecialisme[]
+}
+
+model ToeleverancierSpecialisme {
+  toeleverancierId Int
+  specialismeId    Int
+  toeleverancier   Toeleverancier @relation(fields: [toeleverancierId], references: [id], onDelete: Cascade)
+  specialisme      Specialisme    @relation(fields: [specialismeId], references: [id], onDelete: Cascade)
+
+  @@id([toeleverancierId, specialismeId])
 }
 
 model ToeleverancierContact {

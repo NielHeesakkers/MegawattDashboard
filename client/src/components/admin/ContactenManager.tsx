@@ -5,6 +5,7 @@ import Modal from '../ui/Modal';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import { EUROPESE_LANDEN_PRIO, EUROPESE_LANDEN_REST } from '../../shared/countries';
+import { fetchSpecialismes, Specialisme } from '../../api';
 
 export interface ContactEntity {
   id: number;
@@ -17,6 +18,7 @@ export interface ContactEntity {
   stad: string | null;
   land: string | null;
   contacts?: Array<{ naam: string; email: string | null; telefoon: string | null }>;
+  specialismes?: Array<{ specialismeId: number; specialisme: Specialisme }>;
   _count?: { projects?: number };
 }
 
@@ -29,6 +31,7 @@ interface Props<T extends ContactEntity> {
   update: (id: number, fd: FormData) => Promise<T>;
   remove: (id: number) => Promise<unknown>;
   showProjectsCount?: boolean; // alleen voor Klanten
+  showSpecialismes?: boolean;  // alleen voor Toeleveranciers
 }
 
 type SortKey = 'name' | 'contactPerson' | 'email' | 'projects';
@@ -40,7 +43,7 @@ const emptyContact = (): ContactRow => ({ naam: '', email: '', telefoon: '' });
 const inputClass = 'w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white text-sm focus:outline-none focus:border-accent-teal';
 
 export default function ContactenManager<T extends ContactEntity>({
-  title, singular, newButtonLabel, fetchAll, create, update, remove, showProjectsCount,
+  title, singular, newButtonLabel, fetchAll, create, update, remove, showProjectsCount, showSpecialismes,
 }: Props<T>) {
   const toast = useToast();
   const [items, setItems] = useState<T[]>([]);
@@ -48,6 +51,8 @@ export default function ContactenManager<T extends ContactEntity>({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ name: '', adres: '', postcode: '', stad: '', land: '' });
   const [contacts, setContacts] = useState<ContactRow[]>([emptyContact()]);
+  const [selectedSpecialismeIds, setSelectedSpecialismeIds] = useState<number[]>([]);
+  const [allSpecialismes, setAllSpecialismes] = useState<Specialisme[]>([]);
   const [deleting, setDeleting] = useState<T | null>(null);
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -60,10 +65,12 @@ export default function ContactenManager<T extends ContactEntity>({
 
   const load = async () => setItems(await fetchAll());
   useEffect(() => { load(); }, []);
+  useEffect(() => { if (showSpecialismes) fetchSpecialismes().then(setAllSpecialismes); }, [showSpecialismes]);
 
   const openCreate = () => {
     setForm({ name: '', adres: '', postcode: '', stad: '', land: '' });
     setContacts([emptyContact()]);
+    setSelectedSpecialismeIds([]);
     setEditingId(null);
     setLogoFile(null);
     setLogoPreview(null);
@@ -86,6 +93,7 @@ export default function ContactenManager<T extends ContactEntity>({
       existing.push({ naam: item.contactPerson ?? '', email: item.email ?? '', telefoon: '' });
     }
     setContacts(existing);
+    setSelectedSpecialismeIds((item.specialismes ?? []).map((s) => s.specialismeId));
     setEditingId(item.id);
     setLogoFile(null);
     setLogoPreview(item.logo || null);
@@ -123,6 +131,7 @@ export default function ContactenManager<T extends ContactEntity>({
       fd.append('contacts', JSON.stringify(filtered));
       if (logoFile) fd.append('logo', logoFile);
       if (removeLogo) fd.append('removeLogo', 'true');
+      if (showSpecialismes) fd.append('specialismeIds', JSON.stringify(selectedSpecialismeIds));
 
       if (editingId) {
         await update(editingId, fd);
@@ -201,6 +210,9 @@ export default function ContactenManager<T extends ContactEntity>({
               </th>
               <th className="text-left px-3 py-3 text-text-secondary text-sm font-medium whitespace-nowrap">Telefoon</th>
               <th className="text-left px-3 py-3 text-text-secondary text-sm font-medium whitespace-nowrap">Plaats</th>
+              {showSpecialismes && (
+                <th className="text-left px-3 py-3 text-text-secondary text-sm font-medium whitespace-nowrap">Specialismes</th>
+              )}
               {showProjectsCount && (
                 <th className="text-left px-3 py-3 text-text-secondary text-sm font-medium cursor-pointer select-none hover:text-text-primary whitespace-nowrap" onClick={() => toggleSort('projects')}>
                   Projecten <SortIcon column="projects" />
@@ -246,6 +258,17 @@ export default function ContactenManager<T extends ContactEntity>({
                     ) : ''}
                   </td>
                   <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{[item.stad, item.land].filter(Boolean).join(', ')}</td>
+                  {showSpecialismes && (
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {(item.specialismes ?? []).map((s) => (
+                          <span key={s.specialismeId} className="px-2 py-0.5 rounded-full bg-accent-teal/15 text-accent-teal text-xs font-medium whitespace-nowrap">
+                            {s.specialisme.naam}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  )}
                   {showProjectsCount && (
                     <td className="px-3 py-2 text-text-secondary">{item._count?.projects ?? 0}</td>
                   )}
@@ -259,7 +282,7 @@ export default function ContactenManager<T extends ContactEntity>({
             })}
             {items.length === 0 && (
               <tr>
-                <td colSpan={showProjectsCount ? 8 : 7} className="px-3 py-8 text-center text-text-muted">
+                <td colSpan={(showProjectsCount ? 8 : 7) + (showSpecialismes ? 1 : 0)} className="px-3 py-8 text-center text-text-muted">
                   Nog geen {title.toLowerCase()}. Klik op "{newButtonLabel}" om er een toe te voegen.
                 </td>
               </tr>
@@ -403,6 +426,37 @@ export default function ContactenManager<T extends ContactEntity>({
               + Contactpersoon toevoegen
             </button>
           </div>
+
+          {showSpecialismes && (
+            <div>
+              <label className="block text-text-secondary text-sm mb-2">Specialismes</label>
+              {allSpecialismes.length === 0 ? (
+                <p className="text-sm text-white/30 italic">Geen specialismes beschikbaar. Voeg ze toe via het tabblad Instellingen.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {allSpecialismes.map((s) => {
+                    const active = selectedSpecialismeIds.includes(s.id);
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setSelectedSpecialismeIds(
+                          active ? selectedSpecialismeIds.filter((id) => id !== s.id) : [...selectedSpecialismeIds, s.id]
+                        )}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer ${
+                          active
+                            ? 'bg-accent-teal text-[#1a3a38]'
+                            : 'bg-white/5 ring-1 ring-white/15 text-white/50 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        {active && <span className="mr-1">✓</span>}{s.naam}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg bg-white/10 text-text-primary hover:bg-white/20 transition-colors cursor-pointer">

@@ -14,6 +14,7 @@ import ClientTeamManager from './components/admin/ClientTeamManager';
 import Settings from './components/admin/Settings';
 import SuperchargerManager from './components/admin/SuperchargerManager';
 import KlantenManager from './components/admin/KlantenManager';
+import ToeleveranciersManager from './components/admin/ToeleveranciersManager';
 import ProjectList from './components/admin/ProjectList';
 import ProjectForm from './components/admin/ProjectForm';
 import BriefingPage from './components/BriefingPage';
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="client-teams" element={<ClientTeamManager />} />
           <Route path="versions" element={<VersionHistory />} />
           <Route path="klanten" element={<KlantenManager />} />
+          <Route path="toeleveranciers" element={<ToeleveranciersManager />} />
           <Route path="projects" element={<ProjectList />} />
           <Route path="projects/new" element={<ProjectForm />} />
           <Route path="projects/:id" element={<ProjectForm />} />

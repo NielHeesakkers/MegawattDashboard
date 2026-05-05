@@ -12,6 +12,7 @@ const navItems: NavEntry[] = [
   { type: 'item', to: '/admin/members', label: 'Medewerkers' },
   { type: 'item', to: '/admin/directie', label: 'Directie' },
   { type: 'item', to: '/admin/klanten', label: 'Klanten' },
+  { type: 'item', to: '/admin/toeleveranciers', label: 'Toeleveranciers' },
   {
     type: 'group',
     label: 'Intern',

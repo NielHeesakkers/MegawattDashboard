@@ -29,6 +29,7 @@ import superchargerRoutes from './routes/superchargers';
 import locationRoutes from './routes/locations';
 import locProjectRoutes from './routes/loc-projects';
 import toeleveranciersRoutes from './routes/toeleveranciers';
+import specialismesRoutes from './routes/specialismes';
 
 process.on('unhandledRejection', (reason) => {
   console.error('[Unhandled Rejection]', reason);
@@ -59,6 +60,7 @@ app.use('/api/superchargers', superchargerRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/loc-projects', locProjectRoutes);
 app.use('/api/toeleveranciers', toeleveranciersRoutes);
+app.use('/api/specialismes', specialismesRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
