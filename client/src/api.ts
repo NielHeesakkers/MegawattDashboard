@@ -167,15 +167,53 @@ export interface Client {
   order: number;
 }
 
+export interface KlantContact {
+  id: number;
+  klantId: number;
+  naam: string;
+  email: string | null;
+  telefoon: string | null;
+  order: number;
+}
+
 export interface Klant {
   id: number;
   name: string;
   contactPerson: string | null;
   email: string | null;
   logo: string | null;
+  adres: string | null;
+  postcode: string | null;
+  stad: string | null;
+  land: string | null;
+  contacts?: KlantContact[];
   createdAt: string;
   updatedAt: string;
   _count?: { projects: number };
+}
+
+export interface ToeleverancierContact {
+  id: number;
+  toeleverancierId: number;
+  naam: string;
+  email: string | null;
+  telefoon: string | null;
+  order: number;
+}
+
+export interface Toeleverancier {
+  id: number;
+  name: string;
+  contactPerson: string | null;
+  email: string | null;
+  logo: string | null;
+  adres: string | null;
+  postcode: string | null;
+  stad: string | null;
+  land: string | null;
+  contacts?: ToeleverancierContact[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ActivationStaffMember {
@@ -233,6 +271,146 @@ export interface Project {
   updatedAt: string;
 }
 
+// Location types
+export interface LocationContact {
+  id: number;
+  locationId: number;
+  naam: string;
+  email: string | null;
+  telefoon: string | null;
+  website: string | null;
+  rol: string | null;
+  order: number;
+}
+
+export interface LocationPhoto {
+  id: number;
+  locationId: number;
+  filename: string;
+  isMain: boolean;
+  order: number;
+  createdAt: string;
+}
+
+export interface LocationCost {
+  id: number;
+  locationId: number;
+  label: string;
+  bedragCents: number;
+  order: number;
+}
+
+export type OmgevingType = 'centrum' | 'winkelstraat' | 'park' | 'plein' | 'stationsplein';
+export type Orientatie = 'N' | 'NO' | 'O' | 'ZO' | 'Z' | 'ZW' | 'W' | 'NW';
+export type EigendomType = 'particulier' | 'gemeentelijk' | 'bedrijf';
+
+export interface Location {
+  id: number;
+  code: string | null;
+  naam: string;
+  land: string;
+  stad: string | null;
+  adres: string;
+  lat: number | null;
+  lng: number | null;
+  omgevingType: OmgevingType;
+  orientatie: Orientatie;
+  eigendomType: EigendomType;
+  vergunningNodig: boolean;
+  vergunningLink: string | null;
+  truckBereikbaar: boolean;
+  geschiktActivatie: boolean;
+  geschiktSampling: boolean;
+  geschiktAnder: string | null;
+  stroom: boolean;
+  verlichting: boolean;
+  lengte: number | null;
+  breedte: number | null;
+  m2: number | null;
+  notities: string;
+  createdAt: string;
+  updatedAt: string;
+  contacts: LocationContact[];
+  photos: LocationPhoto[];
+  costs: LocationCost[];
+  locProjects?: Array<{
+    id: number;
+    locProjectId: number;
+    locProject: { id: number; projectNumber: string; name: string | null; klant: { id: number; name: string; logo: string | null } };
+  }>;
+}
+
+export type LocationWriteInput = Omit<Location, 'id' | 'code' | 'stad' | 'lat' | 'lng' | 'createdAt' | 'updatedAt' | 'contacts' | 'photos' | 'costs' | 'locProjects'> & {
+  contacts: Array<Omit<LocationContact, 'id' | 'locationId' | 'order'>>;
+  costs: Array<Omit<LocationCost, 'id' | 'locationId' | 'order'>>;
+};
+
+export type AvailabilityState = 'yes' | 'no' | 'unknown';
+
+export interface LocProjectLocation {
+  id: number;
+  locProjectId: number;
+  locationId: number;
+  order: number;
+  startDate: string | null;
+  endDate: string | null;
+  available: AvailabilityState;
+  actionOpen: boolean;
+  actionLabel: string | null;
+  opmerkingen: string;
+  location?: Location;
+}
+
+export type LocProjectStatus = 'starten' | 'bezig' | 'afgerond';
+
+export interface LocProjectContact {
+  id: number;
+  locProjectId: number;
+  naam: string;
+  email: string | null;
+  telefoon: string | null;
+  order: number;
+}
+
+export interface LocProject {
+  id: number;
+  klantId: number;
+  klant?: { id: number; name: string; logo: string | null };
+  projectNumber: string;
+  name: string | null;
+  status: LocProjectStatus;
+  contactPerson: string | null;
+  email: string | null;
+  telefoon: string | null;
+  contacts?: LocProjectContact[];
+  notities: string;
+  locations?: LocProjectLocation[];
+  createdAt: string;
+  updatedAt: string;
+  _count?: { locations: number };
+}
+
+export interface LocProjectWriteInput {
+  klantId: number;
+  projectNumber: string;
+  name?: string | null;
+  status?: LocProjectStatus;
+  contactPerson?: string | null;
+  email?: string | null;
+  telefoon?: string | null;
+  contacts?: Array<{ naam: string; email?: string | null; telefoon?: string | null }>;
+  notities?: string;
+  locations?: Array<{
+    locationId: number;
+    startDate?: string | null;
+    endDate?: string | null;
+    available?: AvailabilityState;
+    actionOpen?: boolean;
+    actionLabel?: string | null;
+    opmerkingen?: string;
+  }>;
+}
+
 // Superchargers
 export const fetchSuperchargers = () => api.get<Supercharger[]>('/superchargers').then((r) => r.data);
 export const createSupercharger = (data: FormData) => api.post<Supercharger>('/superchargers', data).then((r) => r.data);
@@ -270,6 +448,13 @@ export const fetchKlant = (id: number) => api.get<Klant>(`/klanten/${id}`).then(
 export const createKlant = (data: FormData) => api.post<Klant>('/klanten', data).then((r) => r.data);
 export const updateKlant = (id: number, data: FormData) => api.put<Klant>(`/klanten/${id}`, data).then((r) => r.data);
 export const deleteKlant = (id: number) => api.delete(`/klanten/${id}`);
+
+// Toeleveranciers (zelfde shape als Klanten, geen project-relaties)
+export const fetchToeleveranciers = () => api.get<Toeleverancier[]>('/toeleveranciers').then((r) => r.data);
+export const fetchToeleverancier = (id: number) => api.get<Toeleverancier>(`/toeleveranciers/${id}`).then((r) => r.data);
+export const createToeleverancier = (data: FormData) => api.post<Toeleverancier>('/toeleveranciers', data).then((r) => r.data);
+export const updateToeleverancier = (id: number, data: FormData) => api.put<Toeleverancier>(`/toeleveranciers/${id}`, data).then((r) => r.data);
+export const deleteToeleverancier = (id: number) => api.delete(`/toeleveranciers/${id}`);
 
 // Projects
 export const fetchProjects = (status?: string) =>
@@ -374,5 +559,78 @@ export const sendTestEmail = (testEmail: string) =>
 
 export const shareViaEmail = (data: { to: string; subject?: string; pdfBase64: string; fileName?: string }) =>
   api.post<{ success: boolean }>('/share-email', data).then((r) => r.data);
+
+// Locations
+export async function fetchLocations(): Promise<Location[]> {
+  const { data } = await api.get('/locations');
+  return data;
+}
+
+export async function fetchLocation(id: number): Promise<Location> {
+  const { data } = await api.get(`/locations/${id}`);
+  return data;
+}
+
+export async function createLocation(input: LocationWriteInput): Promise<Location> {
+  const { data } = await api.post('/locations', input);
+  return data;
+}
+
+export async function updateLocation(id: number, input: LocationWriteInput): Promise<Location> {
+  const { data } = await api.put(`/locations/${id}`, input);
+  return data;
+}
+
+export interface LocationDeleteConflict {
+  error: string;
+  projects: Array<{ id: number; projectNumber: string; name: string | null }>;
+}
+
+export async function deleteLocation(id: number, force = false): Promise<void> {
+  await api.delete(`/locations/${id}`, { params: force ? { force: 'true' } : undefined });
+}
+
+export async function geocodeLocation(id: number): Promise<{ lat: number | null; lng: number | null; adres: string; found: boolean }> {
+  const { data } = await api.post(`/locations/${id}/geocode`);
+  return data;
+}
+
+export async function uploadLocationPhotos(id: number, files: File[]): Promise<LocationPhoto[]> {
+  const form = new FormData();
+  for (const f of files) form.append('photos', f);
+  const { data } = await api.post(`/locations/${id}/photos`, form);
+  return data;
+}
+
+export async function deleteLocationPhoto(id: number, photoId: number): Promise<void> {
+  await api.delete(`/locations/${id}/photos/${photoId}`);
+}
+
+export async function reorderLocationPhotos(id: number, order: number[]): Promise<void> {
+  await api.patch(`/locations/${id}/photos/order`, { order });
+}
+
+export async function setLocationPhotoMain(id: number, photoId: number): Promise<void> {
+  await api.patch(`/locations/${id}/photos/${photoId}/main`);
+}
+
+export async function backfillLocationCodes(): Promise<{ count: number }> {
+  const { data } = await api.post('/locations/backfill-codes');
+  return data;
+}
+
+export interface AdresSuggestion { display_name: string; lat: number; lng: number }
+export async function suggestAdres(q: string, land: string): Promise<AdresSuggestion[]> {
+  if (q.trim().length < 3) return [];
+  const { data } = await api.get<AdresSuggestion[]>('/locations/suggest', { params: { q, land } });
+  return data;
+}
+
+// LocProjects (locatie-planning projecten, apart van de Planning > Projecten)
+export const fetchLocProjects = () => api.get<LocProject[]>('/loc-projects').then((r) => r.data);
+export const fetchLocProject = (id: number) => api.get<LocProject>(`/loc-projects/${id}`).then((r) => r.data);
+export const createLocProject = (data: LocProjectWriteInput) => api.post<LocProject>('/loc-projects', data).then((r) => r.data);
+export const updateLocProject = (id: number, data: LocProjectWriteInput) => api.put<LocProject>(`/loc-projects/${id}`, data).then((r) => r.data);
+export const deleteLocProject = (id: number) => api.delete(`/loc-projects/${id}`);
 
 export default api;

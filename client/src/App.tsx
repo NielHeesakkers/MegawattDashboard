@@ -27,8 +27,23 @@ export default function App() {
         {/* Public briefing page (no auth) */}
         <Route path="/briefing/:token" element={<BriefingPage />} />
 
-        {/* Public dashboard */}
+        {/* Public dashboard — dezelfde OrganigramPage bedient elke sectie, route bepaalt de view */}
         <Route path="/" element={<OrganigramPage />} />
+        <Route path="/klantteams" element={<OrganigramPage />} />
+        <Route path="/klanten" element={<OrganigramPage />} />
+        <Route path="/toeleveranciers" element={<OrganigramPage />} />
+        <Route path="/contacten/klanten" element={<OrganigramPage />} />
+        <Route path="/contacten/toeleveranciers" element={<OrganigramPage />} />
+        <Route path="/planning/projecten" element={<OrganigramPage />} />
+        <Route path="/planning/projecten/new" element={<OrganigramPage />} />
+        <Route path="/planning/projecten/:projectId" element={<OrganigramPage />} />
+        <Route path="/planning/superchargers" element={<OrganigramPage />} />
+        <Route path="/locatie/projecten" element={<OrganigramPage />} />
+        <Route path="/locatie/projecten/new" element={<OrganigramPage />} />
+        <Route path="/locatie/projecten/:locProjectId" element={<OrganigramPage />} />
+        <Route path="/locatie/locaties" element={<OrganigramPage />} />
+        <Route path="/locatie/locaties/new" element={<OrganigramPage />} />
+        <Route path="/locatie/locaties/:locationId" element={<OrganigramPage />} />
 
         {/* Admin panel */}
         <Route path="/admin" element={<AdminLayout />}>

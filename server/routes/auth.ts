@@ -8,7 +8,7 @@ import { logAudit } from '../lib/audit';
 const router = Router();
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'megawatt-dashboard-secret-2026';
-const AVAILABLE_TABS = ['intern', 'planning'];
+const AVAILABLE_TABS = ['intern', 'planning', 'locatie'];
 
 // Login rate limiting — max 5 attempts per 15 minutes per IP
 const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
