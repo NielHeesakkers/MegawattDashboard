@@ -13,6 +13,14 @@ export const EUROPESE_LANDEN_REST = [
   'Vaticaanstad', 'Verenigd Koninkrijk', 'Wit-Rusland', 'Zweden', 'Zwitserland',
 ] as const;
 
+// Land naam → vlag emoji (via ISO code → regional indicator symbols)
+export function landToFlag(land: string | null | undefined): string {
+  if (!land) return '';
+  const iso = LAND_TO_ISO[land];
+  if (!iso) return '';
+  return iso.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt(0)));
+}
+
 export const LAND_TO_ISO: Record<string, string> = {
   'Nederland': 'nl', 'België': 'be', 'Belgie': 'be', 'Duitsland': 'de',
   'Albanië': 'al', 'Andorra': 'ad', 'Bosnië en Herzegovina': 'ba', 'Bulgarije': 'bg',

@@ -33,7 +33,7 @@ const MegawattLogo = () => (
 );
 
 export default function AdminLayout() {
-  const { isAuthenticated, isAdmin, username, logout } = useAuth();
+  const { isAuthenticated, isAdmin, isSuperuser, username, logout } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -43,7 +43,8 @@ export default function AdminLayout() {
   }, [location.pathname]);
 
   if (!isAuthenticated) return <LoginForm />;
-  if (!isAdmin) {
+  // Alleen admin + superuser mogen het admin-panel in; gewone users → frontend
+  if (!isAdmin && !isSuperuser) {
     window.location.href = '/';
     return null;
   }

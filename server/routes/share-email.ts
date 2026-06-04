@@ -3,6 +3,7 @@ import nodemailer from 'nodemailer';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
 import { getSmtpSettings } from './settings';
+import { emailLayout } from '../lib/email';
 
 const router = Router();
 
@@ -43,18 +44,23 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     const emailSubject = subject || 'Megawatt Organigram';
     const attachmentName = fileName || 'MEGAWATT-Organigram.pdf';
     const isKlantteams = (subject || '').toLowerCase().includes('klantteam');
-    const bodyText = isKlantteams
-      ? 'Zie de bijlage voor de Megawatt klantteams.'
-      : 'Zie de bijlage voor het Megawatt organigram.';
-    const bodyHtml = isKlantteams
-      ? '<p>Zie de bijlage voor de <strong>Megawatt klantteams</strong>.</p>'
-      : '<p>Zie de bijlage voor het <strong>Megawatt organigram</strong>.</p>';
+    const title = isKlantteams ? 'Megawatt Klantteams' : 'Megawatt Organigram';
+    const bodyHtml = emailLayout(title, `
+      <p style="color:rgba(255,255,255,0.7);font-size:14px;line-height:1.6;margin:0 0 20px">
+        ${isKlantteams
+          ? 'Zie de bijlage voor een overzicht van de Megawatt klantteams.'
+          : 'Zie de bijlage voor het actuele Megawatt organigram.'}
+      </p>
+      <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:24px">📎</span>
+        <span style="color:rgba(255,255,255,0.8);font-size:13px">${attachmentName}</span>
+      </div>
+    `);
 
     await transporter.sendMail({
       from: smtp.fromName ? `"${smtp.fromName}" <${smtp.fromEmail}>` : smtp.fromEmail,
       to,
       subject: emailSubject,
-      text: bodyText,
       html: bodyHtml,
       attachments: [
         {

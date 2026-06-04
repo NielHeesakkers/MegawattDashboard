@@ -3,7 +3,7 @@ import {
   exportBackup, importBackup, clearAllData,
   fetchEmailSettings, updateEmailSettings, sendTestEmail,
   fetchBackupList, downloadBackup, deleteBackup, triggerAutoBackup, BackupFile,
-  fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser, AdminUser,
+  fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser, sendWelcomeEmail, AdminUser,
   fetchAuditLogs, AuditLogEntry,
 } from '../../api';
 import { useAuth } from '../../context/AuthContext';
@@ -439,7 +439,8 @@ function UsersTab() {
   const toast = useToast();
   const { username: currentUsername } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [editingUser, setEditingUser] = useState<{ id?: number; username: string; password: string; role: string; allowedTabs: string[] } | null>(null);
+  const [editingUser, setEditingUser] = useState<{ id?: number; username: string; email: string; password: string; role: string; allowedTabs: string[] } | null>(null);
+  const [sendingMail, setSendingMail] = useState(false);
   const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -452,28 +453,32 @@ function UsersTab() {
   useEffect(() => { load(); }, []);
 
   const handleSave = async () => {
-    if (!editingUser?.username || saving) return;
-    if (isCreating && !editingUser.password) { setError('Wachtwoord is verplicht'); return; }
+    if (saving) return;
+    if (isCreating && !editingUser?.email) { setError('E-mailadres is verplicht'); return; }
+    if (!isCreating && !editingUser?.username) return;
     setSaving(true);
     setError('');
     try {
-      if (editingUser.id) {
-        const data: { username?: string; password?: string; role?: string; allowedTabs?: string[] } = {
-          username: editingUser.username,
-          role: editingUser.role,
-          allowedTabs: editingUser.role === 'admin' ? [...ALL_TAB_KEYS] : editingUser.allowedTabs,
+      if (editingUser!.id) {
+        // Bestaande user bewerken
+        const data: { email?: string; password?: string; role?: string; allowedTabs?: string[] } = {
+          email: editingUser!.email,
+          role: editingUser!.role,
+          allowedTabs: editingUser!.role === 'admin' ? [...ALL_TAB_KEYS] : editingUser!.allowedTabs,
         };
-        if (editingUser.password) data.password = editingUser.password;
-        await updateAdminUser(editingUser.id, data);
+        if (editingUser!.password) data.password = editingUser!.password;
+        await updateAdminUser(editingUser!.id, data);
         toast.success('Gebruiker bijgewerkt');
       } else {
-        await createAdminUser({
-          username: editingUser.username,
-          password: editingUser.password,
-          role: editingUser.role,
-          allowedTabs: editingUser.role === 'admin' ? [...ALL_TAB_KEYS] : editingUser.allowedTabs,
+        // Nieuwe user — alleen email + rol nodig
+        const created = await createAdminUser({
+          email: editingUser!.email,
+          role: editingUser!.role,
+          allowedTabs: editingUser!.role === 'admin' ? [...ALL_TAB_KEYS] : editingUser!.allowedTabs,
         });
-        toast.success('Gebruiker aangemaakt');
+        const withEmail = created as AdminUser & { emailSent?: boolean };
+        if (withEmail.emailSent) toast.success('Gebruiker aangemaakt — welkomstmail verstuurd ✉');
+        else toast.success('Gebruiker aangemaakt (welkomstmail kon niet worden verstuurd)');
       }
       setEditingUser(null);
       setIsCreating(false);
@@ -504,7 +509,7 @@ function UsersTab() {
     <>
       <div className="flex items-center justify-between mb-4">
         <button
-          onClick={() => { setEditingUser({ username: '', password: '', role: 'user', allowedTabs: [] }); setIsCreating(true); setError(''); }}
+          onClick={() => { setEditingUser({ username: '', email: '', password: '', role: 'user', allowedTabs: [] }); setIsCreating(true); setError(''); setError(''); }}
           className="flex items-center gap-2 px-4 py-2 rounded-[8px] bg-accent text-bg-dark text-sm font-semibold hover:opacity-85 transition-opacity cursor-pointer"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
@@ -520,21 +525,43 @@ function UsersTab() {
         {users.map((user) => (
           <div
             key={user.id}
-            onClick={() => { setEditingUser({ id: user.id, username: user.username, password: '', role: user.role, allowedTabs: user.allowedTabs }); setIsCreating(false); setError(''); }}
+            onClick={() => { setEditingUser({ id: user.id, username: user.username, email: user.email ?? '', password: '', role: user.role, allowedTabs: user.allowedTabs }); setIsCreating(false); setError(''); }}
             className="flex items-center gap-3 bg-bg-card p-3 rounded-lg hover:bg-white/5 cursor-pointer"
           >
             <div className="w-8 h-8 rounded-full bg-accent-teal/20 flex items-center justify-center text-accent-teal text-sm font-bold flex-shrink-0">
-              {user.username.charAt(0).toUpperCase()}
+              {(user.email || user.username).charAt(0).toUpperCase()}
             </div>
-            <span className="flex-1 text-text-primary font-medium">{user.username}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full ${user.role === 'admin' ? 'bg-accent/20 text-accent' : 'bg-white/10 text-text-secondary'}`}>
-              {user.role === 'admin' ? 'Admin' : 'Gebruiker'}
+            <div className="flex-1 min-w-0">
+              <p className="text-text-primary font-medium truncate">{user.email || user.username}</p>
+            </div>
+            <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+              user.role === 'admin' ? 'bg-accent/20 text-accent' :
+              user.role === 'superuser' ? 'bg-accent-teal/20 text-accent-teal' :
+              'bg-white/10 text-text-secondary'
+            }`}>
+              {user.role === 'admin' ? 'Admin' : user.role === 'superuser' ? 'Super User' : 'Gebruiker'}
             </span>
             {user.allowedTabs && user.role !== 'admin' && (
               <span className="text-xs text-text-muted">{user.allowedTabs.join(', ')}</span>
             )}
-            {user.username === currentUsername && (
-              <span className="text-accent-teal text-xs bg-accent-teal/10 px-2 py-0.5 rounded-full">Jij</span>
+            {(user.email === currentUsername || user.username === currentUsername) && (
+              <span className="text-accent-teal text-xs bg-accent-teal/10 px-2 py-0.5 rounded-full shrink-0">Jij</span>
+            )}
+            {user.email && (
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try { await sendWelcomeEmail(user.id); toast.success('Welkomstmail verstuurd'); }
+                  catch (err: unknown) {
+                    const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'E-mail versturen mislukt';
+                    toast.error(msg);
+                  }
+                }}
+                className="text-accent-teal text-sm hover:underline cursor-pointer"
+                title="Stuur welkomstmail met wachtwoord-instel link"
+              >
+                ✉ Mail
+              </button>
             )}
             <button
               onClick={(e) => { e.stopPropagation(); setDeletingUser(user); setError(''); }}
@@ -556,15 +583,36 @@ function UsersTab() {
         {editingUser && (
           <div className="space-y-4">
             {error && <p className="text-danger text-sm bg-danger/10 px-4 py-2 rounded-lg">{error}</p>}
+
+            {/* Nieuwe user: alleen email + rol — wachtwoord via welkomstmail */}
+            {isCreating && (
+              <div className="bg-accent-teal/10 border border-accent-teal/30 rounded-lg px-4 py-3 text-accent-teal text-sm flex items-start gap-2">
+                <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" /></svg>
+                De gebruiker ontvangt een welkomstmail om zelf een wachtwoord in te stellen.
+              </div>
+            )}
+
             <div>
-              <label className="block text-text-secondary text-sm mb-1">Gebruikersnaam</label>
-              <input type="text" value={editingUser.username} onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })} className={inputClass} />
+              <label className="block text-text-secondary text-sm mb-1">E-mailadres</label>
+              <input
+                type="email"
+                value={editingUser.email}
+                onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                className={inputClass}
+                placeholder="naam@megawatt.agency"
+                autoFocus={isCreating}
+              />
+              {isCreating && <p className="text-text-muted text-xs mt-1">Dit wordt ook de gebruikersnaam</p>}
             </div>
-            <div>
-              <label className="block text-text-secondary text-sm mb-1">{isCreating ? 'Wachtwoord' : 'Nieuw wachtwoord (laat leeg om niet te wijzigen)'}</label>
-              <input type="password" value={editingUser.password} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} className={inputClass} placeholder={isCreating ? '' : 'Ongewijzigd'} />
-              {editingUser.password && <PasswordStrength password={editingUser.password} />}
-            </div>
+
+            {/* Bestaande user: optioneel wachtwoord wijzigen */}
+            {!isCreating && (
+              <div>
+                <label className="block text-text-secondary text-sm mb-1">Nieuw wachtwoord <span className="text-text-muted">(laat leeg om niet te wijzigen)</span></label>
+                <input type="password" value={editingUser.password} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} className={inputClass} placeholder="Ongewijzigd" />
+                {editingUser.password && <PasswordStrength password={editingUser.password} />}
+              </div>
+            )}
             <div>
               <label className="block text-text-secondary text-sm mb-1">Rol</label>
               <select
@@ -572,8 +620,9 @@ function UsersTab() {
                 onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
                 className={inputClass}
               >
-                <option value="user">Gebruiker</option>
-                <option value="admin">Admin</option>
+                <option value="user">Gebruiker — alleen frontend</option>
+                <option value="superuser">Super User — alles behalve accountbeheer</option>
+                <option value="admin">Admin — volledige toegang</option>
               </select>
             </div>
             <div>
@@ -692,7 +741,12 @@ function AuditTab() {
 
 // ---- Main component ----
 export default function Settings() {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   const [activeTab, setActiveTab] = useState<Tab>('data');
+
+  // Gebruikers-tab alleen voor admins
+  const visibleTabs = tabs.filter(t => t.key !== 'users' || isAdmin);
 
   return (
     <div>
@@ -700,7 +754,7 @@ export default function Settings() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-[rgba(255,255,255,0.08)]">
-        {tabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
@@ -718,7 +772,7 @@ export default function Settings() {
       {/* Tab content */}
       {activeTab === 'data' && <DataTab />}
       {activeTab === 'email' && <EmailTab />}
-      {activeTab === 'users' && <UsersTab />}
+      {activeTab === 'users' && isAdmin && <UsersTab />}
       {activeTab === 'audit' && <AuditTab />}
     </div>
   );

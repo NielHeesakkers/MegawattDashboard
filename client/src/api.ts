@@ -67,6 +67,7 @@ export interface Executive {
 export interface AdminUser {
   id: number;
   username: string;
+  email: string | null;
   role: string;
   allowedTabs: string[];
 }
@@ -107,11 +108,33 @@ export const updateExecutive = (id: number, data: FormData) => api.put<Executive
 export const deleteExecutive = (id: number) => api.delete(`/executives/${id}`);
 
 export const fetchAdminUsers = () => api.get<AdminUser[]>('/auth/users').then((r) => r.data);
-export const createAdminUser = (data: { username: string; password: string; role: string; allowedTabs: string[] }) =>
+export const createAdminUser = (data: { email: string; role: string; allowedTabs: string[]; username?: string; password?: string }) =>
   api.post<AdminUser>('/auth/users', data).then((r) => r.data);
-export const updateAdminUser = (id: number, data: { username?: string; password?: string; role?: string; allowedTabs?: string[] }) =>
+export const updateAdminUser = (id: number, data: { username?: string; password?: string; email?: string; role?: string; allowedTabs?: string[] }) =>
   api.put<AdminUser>(`/auth/users/${id}`, data).then((r) => r.data);
 export const deleteAdminUser = (id: number) => api.delete(`/auth/users/${id}`);
+export const sendWelcomeEmail = (id: number) =>
+  api.post<{ success: boolean }>(`/auth/users/${id}/send-welcome`).then((r) => r.data);
+
+// Wachtwoord reset via e-mail
+export const forgotPassword = (email: string) =>
+  api.post<{ success: boolean; message: string }>('/auth/forgot-password', { email }).then((r) => r.data);
+export const checkResetToken = (token: string) =>
+  api.get<{ valid: boolean; username?: string; error?: string }>(`/auth/reset-password/${token}/check`).then((r) => r.data);
+export const resetPassword = (token: string, newPassword: string) =>
+  api.post<{ success: boolean }>('/auth/reset-password', { token, newPassword }).then((r) => r.data);
+
+// Globale zoekopdracht
+export interface GlobalSearchResults {
+  members: Array<{ id: number; name: string; role: string | null; email: string | null; photo: string | null; team: { id: number; name: string } | null }>;
+  executives: Array<{ id: number; name: string; role: string | null; email: string | null; photo: string | null }>;
+  klanten: Array<{ id: number; name: string; logo: string | null; stad: string | null; land: string | null }>;
+  toeleveranciers: Array<{ id: number; name: string; logo: string | null; stad: string | null; land: string | null }>;
+  locaties: Array<{ id: number; code: string | null; naam: string | null; stad: string | null; land: string | null }>;
+  projecten: Array<{ id: number; name: string | null; projectNumber: string; klant: { name: string } }>;
+}
+export const globalSearch = (q: string) =>
+  api.get<GlobalSearchResults>(`/search?q=${encodeURIComponent(q)}`).then((r) => r.data);
 
 export const fetchAuditLogs = (page = 1, limit = 50) =>
   api.get<{ logs: AuditLogEntry[]; total: number; page: number; pages: number }>(
@@ -259,17 +282,57 @@ export interface Activation {
   updatedAt: string;
 }
 
+export type ProjectStatus = 'active' | 'completed' | 'cancelled';
+export type AvailabilityState = 'yes' | 'no' | 'unknown';
+
+export interface ProjectContact {
+  id: number;
+  projectId: number;
+  naam: string;
+  email: string | null;
+  telefoon: string | null;
+  order: number;
+}
+
+export interface ProjectLocationSupercharger {
+  id: number;
+  projectLocationId: number;
+  superchargerId: number;
+  /** JSON-string: { "2026-06-05": true, ... } */
+  availability: string;
+  order: number;
+  supercharger?: { id: number; firstName: string; lastName: string; function: string; photo: string | null };
+}
+
+export interface ProjectLocation {
+  id: number;
+  projectId: number;
+  locationId: number;
+  order: number;
+  startDate: string | null;
+  endDate: string | null;
+  available: AvailabilityState;
+  actionOpen: boolean;
+  actionLabel: string | null;
+  opmerkingen: string;
+  location?: Location;
+  superchargers?: ProjectLocationSupercharger[];
+}
+
 export interface Project {
   id: number;
   klantId: number;
-  klant?: Klant;
+  klant?: { id: number; name: string; logo: string | null };
   projectNumber: string;
   name: string | null;
   startDate: string;
   endDate: string;
-  status: 'active' | 'completed';
+  status: ProjectStatus;
   contactPerson: string | null;
   email: string | null;
+  needsLocations: boolean;
+  needsSuperchargers: boolean;
+  notities: string;
   campaignDescription: string | null;
   campaignMessage: string | null;
   campaignTargetAudience: string | null;
@@ -278,9 +341,45 @@ export interface Project {
   settingInstructions: string | null;
   extraInfo: string | null;
   activations?: Activation[];
-  _count?: { activations: number };
+  contacts?: ProjectContact[];
+  locations?: ProjectLocation[];
+  toeleveranciers?: Array<{ toeleverancierId: number; telefoon?: string | null; toeleverancier?: { id: number; name: string; logo: string | null } }>;
+  _count?: { activations: number; locations: number };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProjectWriteInput {
+  klantId: number;
+  projectNumber: string;
+  name?: string | null;
+  startDate?: string;
+  endDate?: string;
+  status?: ProjectStatus;
+  contactPerson?: string | null;
+  email?: string | null;
+  needsLocations?: boolean;
+  needsSuperchargers?: boolean;
+  notities?: string;
+  campaignDescription?: string | null;
+  campaignMessage?: string | null;
+  campaignTargetAudience?: string | null;
+  campaignTarget?: string | null;
+  clothing?: string | null;
+  settingInstructions?: string | null;
+  extraInfo?: string | null;
+  contacts?: Array<{ naam: string; email?: string | null; telefoon?: string | null }>;
+  locations?: Array<{
+    locationId: number;
+    startDate?: string | null;
+    endDate?: string | null;
+    available?: AvailabilityState;
+    actionOpen?: boolean;
+    actionLabel?: string | null;
+    opmerkingen?: string;
+    superchargers?: Array<{ superchargerId: number; availability?: Record<string, boolean> }>;
+  }>;
+  toeleverancierIds?: Array<{ id: number; telefoon?: string | null }>;
 }
 
 // Location types
@@ -333,6 +432,7 @@ export interface Location {
   truckBereikbaar: boolean;
   geschiktActivatie: boolean;
   geschiktSampling: boolean;
+  geschiktHotspot: boolean;
   geschiktAnder: string | null;
   stroom: boolean;
   verlichting: boolean;
@@ -345,83 +445,19 @@ export interface Location {
   contacts: LocationContact[];
   photos: LocationPhoto[];
   costs: LocationCost[];
-  locProjects?: Array<{
+  projects?: Array<{
     id: number;
-    locProjectId: number;
-    locProject: { id: number; projectNumber: string; name: string | null; klant: { id: number; name: string; logo: string | null } };
+    projectId: number;
+    project: { id: number; projectNumber: string; name: string | null; klant: { id: number; name: string; logo: string | null } };
   }>;
 }
 
-export type LocationWriteInput = Omit<Location, 'id' | 'code' | 'stad' | 'lat' | 'lng' | 'createdAt' | 'updatedAt' | 'contacts' | 'photos' | 'costs' | 'locProjects'> & {
+export type LocationWriteInput = Omit<Location, 'id' | 'code' | 'stad' | 'lat' | 'lng' | 'createdAt' | 'updatedAt' | 'contacts' | 'photos' | 'costs' | 'projects'> & {
   contacts: Array<Omit<LocationContact, 'id' | 'locationId' | 'order'>>;
   costs: Array<Omit<LocationCost, 'id' | 'locationId' | 'order'>>;
 };
 
-export type AvailabilityState = 'yes' | 'no' | 'unknown';
-
-export interface LocProjectLocation {
-  id: number;
-  locProjectId: number;
-  locationId: number;
-  order: number;
-  startDate: string | null;
-  endDate: string | null;
-  available: AvailabilityState;
-  actionOpen: boolean;
-  actionLabel: string | null;
-  opmerkingen: string;
-  location?: Location;
-}
-
-export type LocProjectStatus = 'starten' | 'bezig' | 'afgerond';
-
-export interface LocProjectContact {
-  id: number;
-  locProjectId: number;
-  naam: string;
-  email: string | null;
-  telefoon: string | null;
-  order: number;
-}
-
-export interface LocProject {
-  id: number;
-  klantId: number;
-  klant?: { id: number; name: string; logo: string | null };
-  projectNumber: string;
-  name: string | null;
-  status: LocProjectStatus;
-  contactPerson: string | null;
-  email: string | null;
-  telefoon: string | null;
-  contacts?: LocProjectContact[];
-  notities: string;
-  locations?: LocProjectLocation[];
-  createdAt: string;
-  updatedAt: string;
-  _count?: { locations: number };
-}
-
-export interface LocProjectWriteInput {
-  klantId: number;
-  projectNumber: string;
-  name?: string | null;
-  status?: LocProjectStatus;
-  contactPerson?: string | null;
-  email?: string | null;
-  telefoon?: string | null;
-  contacts?: Array<{ naam: string; email?: string | null; telefoon?: string | null }>;
-  notities?: string;
-  locations?: Array<{
-    locationId: number;
-    startDate?: string | null;
-    endDate?: string | null;
-    available?: AvailabilityState;
-    actionOpen?: boolean;
-    actionLabel?: string | null;
-    opmerkingen?: string;
-  }>;
-}
+// (LocProject types vervangen door unified Project hierboven)
 
 // Superchargers
 export const fetchSuperchargers = () => api.get<Supercharger[]>('/superchargers').then((r) => r.data);
@@ -474,13 +510,14 @@ export const createSpecialisme = (naam: string) => api.post<Specialisme>('/speci
 export const deleteSpecialisme = (id: number) => api.delete(`/specialismes/${id}`);
 
 // Projects
-export const fetchProjects = (status?: string) =>
-  api.get<Project[]>('/projects', { params: status ? { status } : {} }).then((r) => r.data);
 export const fetchProject = (id: number) =>
   api.get<Project>(`/projects/${id}`).then((r) => r.data);
-export const createProject = (data: Partial<Project>) =>
+
+export const fetchProjects = (status?: string) =>
+  api.get<Project[]>('/projects', { params: status ? { status } : {} }).then((r) => r.data);
+export const createProject = (data: ProjectWriteInput | Partial<Project>) =>
   api.post<Project>('/projects', data).then((r) => r.data);
-export const updateProject = (id: number, data: Partial<Project>) =>
+export const updateProject = (id: number, data: ProjectWriteInput | Partial<Project>) =>
   api.put<Project>(`/projects/${id}`, data).then((r) => r.data);
 export const deleteProject = (id: number) => api.delete(`/projects/${id}`);
 
@@ -643,11 +680,30 @@ export async function suggestAdres(q: string, land: string): Promise<AdresSugges
   return data;
 }
 
-// LocProjects (locatie-planning projecten, apart van de Planning > Projecten)
-export const fetchLocProjects = () => api.get<LocProject[]>('/loc-projects').then((r) => r.data);
-export const fetchLocProject = (id: number) => api.get<LocProject>(`/loc-projects/${id}`).then((r) => r.data);
-export const createLocProject = (data: LocProjectWriteInput) => api.post<LocProject>('/loc-projects', data).then((r) => r.data);
-export const updateLocProject = (id: number, data: LocProjectWriteInput) => api.put<LocProject>(`/loc-projects/${id}`, data).then((r) => r.data);
-export const deleteLocProject = (id: number) => api.delete(`/loc-projects/${id}`);
+// Project bestanden
+export interface ProjectFile {
+  filename: string;
+  size: number;
+  uploadedAt: string;
+  url: string;
+  notitie: string;
+}
+export const fetchProjectFiles = (id: number) =>
+  api.get<ProjectFile[]>(`/projects/${id}/files`).then((r) => r.data);
+export const uploadProjectFiles = (id: number, files: File[]) => {
+  const fd = new FormData();
+  files.forEach((f) => fd.append('files', f));
+  return api.post<{ saved: string[] }>(`/projects/${id}/files`, fd).then((r) => r.data);
+};
+export const deleteProjectFile = (id: number, filename: string) =>
+  api.delete(`/projects/${id}/files/${encodeURIComponent(filename)}`);
+export const updateProjectFileNote = (id: number, filename: string, notitie: string) =>
+  api.patch<{ filename: string; notitie: string }>(`/projects/${id}/files/${encodeURIComponent(filename)}`, { notitie }).then((r) => r.data);
+
+// Logo refresh
+export const refreshKlantLogo = (id: number) =>
+  api.post<{ logo: string }>(`/klanten/${id}/refresh-logo`).then((r) => r.data);
+export const refreshToeleverancierLogo = (id: number) =>
+  api.post<{ logo: string }>(`/toeleveranciers/${id}/refresh-logo`).then((r) => r.data);
 
 export default api;

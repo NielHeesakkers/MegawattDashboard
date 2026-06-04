@@ -1,8 +1,9 @@
 import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import nodemailer from 'nodemailer';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { authMiddleware, adminOrSuperuser, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
+import { emailLayout } from '../lib/email';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -22,7 +23,7 @@ async function getSmtpSettings() {
 }
 
 // GET /api/settings/email — email configuration status + values
-router.get('/email', authMiddleware, async (_req: AuthRequest, res: Response) => {
+router.get('/email', authMiddleware, adminOrSuperuser, async (_req: AuthRequest, res: Response) => {
   const smtp = await getSmtpSettings();
 
   res.json({
@@ -37,7 +38,7 @@ router.get('/email', authMiddleware, async (_req: AuthRequest, res: Response) =>
 });
 
 // PUT /api/settings/email — update SMTP + sender settings
-router.put('/email', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/email', authMiddleware, adminOrSuperuser, async (req: AuthRequest, res: Response) => {
   const { smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, fromName } = req.body;
 
   if (!smtpHost || !smtpUser || !fromEmail) {
@@ -71,7 +72,7 @@ router.put('/email', authMiddleware, async (req: AuthRequest, res: Response) => 
 });
 
 // POST /api/settings/email/test — send a test email
-router.post('/email/test', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/email/test', authMiddleware, adminOrSuperuser, async (req: AuthRequest, res: Response) => {
   const smtp = await getSmtpSettings();
 
   if (!smtp.host || !smtp.user || !smtp.pass) {
@@ -101,9 +102,19 @@ router.post('/email/test', authMiddleware, async (req: AuthRequest, res: Respons
     await transporter.sendMail({
       from: smtp.fromName ? `"${smtp.fromName}" <${smtp.fromEmail}>` : smtp.fromEmail,
       to: testEmail,
-      subject: 'Megawatt Dashboard - Test e-mail',
-      text: 'Dit is een test e-mail van het Megawatt Dashboard. De e-mail configuratie werkt correct.',
-      html: '<p>Dit is een test e-mail van het <strong>Megawatt Dashboard</strong>.</p><p>De e-mail configuratie werkt correct.</p>',
+      subject: 'Megawatt Dashboard — Test e-mail',
+      html: emailLayout('Test e-mail', `
+        <p style="color:rgba(255,255,255,0.7);font-size:14px;line-height:1.6;margin:0 0 20px">
+          De e-mailconfiguratie van het Megawatt Dashboard werkt correct.
+          Je ontvangt dit bericht als bevestiging dat verzending via SMTP succesvol is.
+        </p>
+        <div style="background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.3);border-radius:10px;padding:14px 16px;margin-bottom:20px">
+          <p style="margin:0;color:#2dd4bf;font-size:13px;font-weight:600">✓ SMTP-verbinding geslaagd</p>
+        </div>
+        <p style="color:rgba(255,255,255,0.35);font-size:12px;margin:0">
+          Verstuurd vanuit Admin → Instellingen → E-mail test
+        </p>
+      `),
     });
 
     await logAudit('CREATE', 'Email', 0, { action: 'test', to: testEmail }, req.adminUsername);

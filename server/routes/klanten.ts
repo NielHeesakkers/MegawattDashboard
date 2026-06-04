@@ -175,15 +175,9 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
   const existing = await prisma.klant.findUnique({ where: { id } });
   if (!existing) { res.status(404).json({ error: 'Klant niet gevonden' }); return; }
 
-  const [projectCount, locProjectCount] = await Promise.all([
-    prisma.project.count({ where: { klantId: id } }),
-    prisma.locProject.count({ where: { klantId: id } }),
-  ]);
-  if (projectCount > 0 || locProjectCount > 0) {
-    const parts: string[] = [];
-    if (projectCount > 0) parts.push(`${projectCount} planning-project${projectCount === 1 ? '' : 'en'}`);
-    if (locProjectCount > 0) parts.push(`${locProjectCount} locatie-project${locProjectCount === 1 ? '' : 'en'}`);
-    res.status(400).json({ error: `Kan klant niet verwijderen: er ${parts.length === 1 ? 'is' : 'zijn'} nog ${parts.join(' en ')} gekoppeld` });
+  const projectCount = await prisma.project.count({ where: { klantId: id } });
+  if (projectCount > 0) {
+    res.status(400).json({ error: `Kan klant niet verwijderen: er ${projectCount === 1 ? 'is' : 'zijn'} nog ${projectCount} project${projectCount === 1 ? '' : 'en'} gekoppeld` });
     return;
   }
 
@@ -208,6 +202,17 @@ router.post('/refetch-logos', authMiddleware, async (_req: AuthRequest, res: Res
     }
   }
   res.json({ results });
+});
+
+// POST /api/klanten/:id/refresh-logo — handmatig logo opnieuw zoeken
+router.post('/:id/refresh-logo', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  const klant = await prisma.klant.findUnique({ where: { id } });
+  if (!klant) { res.status(404).json({ error: 'Klant niet gevonden' }); return; }
+  const logo = await autoFetchLogo(KLANTEN_SUBDIR, klant.name);
+  if (!logo) { res.status(404).json({ error: 'Geen logo gevonden' }); return; }
+  const updated = await prisma.klant.update({ where: { id }, data: { logo } });
+  res.json({ logo: updated.logo });
 });
 
 export default router;

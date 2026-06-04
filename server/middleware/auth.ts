@@ -34,9 +34,19 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   }
 }
 
+/** Alleen admin — voor gebruikersbeheer en rechtenbeheer */
 export function adminOnly(req: AuthRequest, res: Response, next: NextFunction) {
   if (req.userRole !== 'admin') {
-    res.status(403).json({ error: 'Admin access required' });
+    res.status(403).json({ error: 'Admin toegang vereist' });
+    return;
+  }
+  next();
+}
+
+/** Admin of superuser — voor alle overige beheeracties */
+export function adminOrSuperuser(req: AuthRequest, res: Response, next: NextFunction) {
+  if (req.userRole !== 'admin' && req.userRole !== 'superuser') {
+    res.status(403).json({ error: 'Geen toegang' });
     return;
   }
   next();

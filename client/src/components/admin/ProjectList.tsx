@@ -14,7 +14,6 @@ type SortDir = 'asc' | 'desc';
 
 export default function ProjectList({ onEditProject, onNewProject }: ProjectListProps = {}) {
   const toast = useToast();
-  const [showAll, setShowAll] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
 
@@ -23,11 +22,11 @@ export default function ProjectList({ onEditProject, onNewProject }: ProjectList
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   const load = async () => {
-    const data = await fetchProjects(showAll ? undefined : 'active');
+    const data = await fetchProjects(); // alles ophalen
     setProjects(data);
   };
 
-  useEffect(() => { load(); }, [showAll]);
+  useEffect(() => { load(); }, []);
 
   const handleDelete = async () => {
     if (!deletingProject) return;
@@ -59,7 +58,7 @@ export default function ProjectList({ onEditProject, onNewProject }: ProjectList
     return <span className="text-accent-teal ml-1">{sortDir === 'asc' ? '\u25B2' : '\u25BC'}</span>;
   };
 
-  const sorted = [...projects].sort((a, b) => {
+  const sortFn = (a: Project, b: Project) => {
     let cmp = 0;
     switch (sortKey) {
       case 'projectNumber':
@@ -85,38 +84,72 @@ export default function ProjectList({ onEditProject, onNewProject }: ProjectList
         break;
     }
     return sortDir === 'asc' ? cmp : -cmp;
-  });
+  };
+
+  const actief = projects.filter(p => p.status === 'active').sort(sortFn);
+  const afgerond = projects.filter(p => p.status !== 'active').sort(sortFn);
 
   const thClass = "text-left px-3 py-3 text-text-secondary text-sm font-medium cursor-pointer select-none hover:text-text-primary whitespace-nowrap";
+
+  const renderTable = (rows: Project[], emptyText: string) => (
+    <div className="bg-bg-surface rounded-[12px] border border-[rgba(255,255,255,0.08)] overflow-hidden overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-[rgba(255,255,255,0.08)]">
+            <th className={thClass} onClick={() => toggleSort('projectNumber')}>Projectnummer <SortIcon column="projectNumber" /></th>
+            <th className={thClass} onClick={() => toggleSort('name')}>Projectnaam <SortIcon column="name" /></th>
+            <th className={thClass} onClick={() => toggleSort('klant')}>Klant <SortIcon column="klant" /></th>
+            <th className={`${thClass} text-right`} onClick={() => toggleSort('startDate')}>Startdatum <SortIcon column="startDate" /></th>
+            <th className={`${thClass} text-right`} onClick={() => toggleSort('endDate')}>Einddatum <SortIcon column="endDate" /></th>
+            <th className={thClass} onClick={() => toggleSort('status')}>Status <SortIcon column="status" /></th>
+            <th className={thClass} onClick={() => toggleSort('activations')}>Activaties <SortIcon column="activations" /></th>
+            <th className="text-right px-3 py-3 text-text-secondary text-sm font-medium whitespace-nowrap">Acties</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((project) => (
+            <tr key={project.id} className="border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.02)]">
+              <td className="px-3 py-2">
+                {onEditProject ? (
+                  <button onClick={() => onEditProject(project.id)} className="text-accent-teal hover:opacity-80 font-medium cursor-pointer whitespace-nowrap">{project.projectNumber}</button>
+                ) : (
+                  <Link to={`/admin/projects/${project.id}`} className="text-accent-teal hover:opacity-80 font-medium whitespace-nowrap">{project.projectNumber}</Link>
+                )}
+              </td>
+              <td className="px-3 py-2">
+                {onEditProject ? (
+                  <button onClick={() => onEditProject(project.id)} className="text-accent-teal hover:opacity-80 font-medium cursor-pointer whitespace-nowrap">{project.name || ''}</button>
+                ) : (
+                  <Link to={`/admin/projects/${project.id}`} className="text-accent-teal hover:opacity-80 font-medium whitespace-nowrap">{project.name || ''}</Link>
+                )}
+              </td>
+              <td className="px-3 py-2 text-text-primary">{project.klant?.name || ''}</td>
+              <td className="px-3 py-2 text-text-secondary text-right whitespace-nowrap">{formatDate(project.startDate)}</td>
+              <td className="px-3 py-2 text-text-secondary text-right whitespace-nowrap">{formatDate(project.endDate)}</td>
+              <td className="px-3 py-2">
+                <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${
+                  project.status === 'active' ? 'bg-green-500/15 text-green-400' : 'bg-gray-500/15 text-gray-400'
+                }`}>{project.status === 'active' ? 'Actief' : 'Afgerond'}</span>
+              </td>
+              <td className="px-3 py-2 text-text-secondary">{project._count?.activations ?? 0}</td>
+              <td className="px-3 py-2 text-right whitespace-nowrap">
+                <button onClick={() => setDeletingProject(project)} className="text-red-400 hover:opacity-80 text-sm cursor-pointer">Verwijder</button>
+              </td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr><td colSpan={8} className="px-3 py-8 text-center text-text-muted">{emptyText}</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-text-primary">Projecten</h1>
         <div className="flex items-center gap-4">
-          {/* Toggle: Actieve / Alle projecten */}
-          <div className="flex items-center">
-            <button
-              onClick={() => setShowAll(false)}
-              className={`px-3 py-1.5 rounded-l-[6px] text-sm font-medium border transition-colors cursor-pointer ${
-                !showAll
-                  ? 'bg-accent-teal text-[#1a3a38] border-accent-teal'
-                  : 'text-text-secondary border-[rgba(255,255,255,0.12)] hover:text-text-primary'
-              }`}
-            >
-              Actieve projecten
-            </button>
-            <button
-              onClick={() => setShowAll(true)}
-              className={`px-3 py-1.5 rounded-r-[6px] text-sm font-medium border-y border-r transition-colors cursor-pointer ${
-                showAll
-                  ? 'bg-accent-teal text-[#1a3a38] border-accent-teal'
-                  : 'text-text-secondary border-[rgba(255,255,255,0.12)] hover:text-text-primary'
-              }`}
-            >
-              Alle projecten
-            </button>
-          </div>
           {onNewProject ? (
             <button
               onClick={onNewProject}
@@ -135,92 +168,18 @@ export default function ProjectList({ onEditProject, onNewProject }: ProjectList
         </div>
       </div>
 
-      <div className="bg-bg-surface rounded-[12px] border border-[rgba(255,255,255,0.08)] overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-[rgba(255,255,255,0.08)]">
-              <th className={thClass} onClick={() => toggleSort('projectNumber')}>
-                Projectnummer <SortIcon column="projectNumber" />
-              </th>
-              <th className={thClass} onClick={() => toggleSort('name')}>
-                Projectnaam <SortIcon column="name" />
-              </th>
-              <th className={thClass} onClick={() => toggleSort('klant')}>
-                Klant <SortIcon column="klant" />
-              </th>
-              <th className={`${thClass} text-right`} onClick={() => toggleSort('startDate')}>
-                Startdatum <SortIcon column="startDate" />
-              </th>
-              <th className={`${thClass} text-right`} onClick={() => toggleSort('endDate')}>
-                Einddatum <SortIcon column="endDate" />
-              </th>
-              <th className={thClass} onClick={() => toggleSort('status')}>
-                Status <SortIcon column="status" />
-              </th>
-              <th className={thClass} onClick={() => toggleSort('activations')}>
-                Activaties <SortIcon column="activations" />
-              </th>
-              <th className="text-right px-3 py-3 text-text-secondary text-sm font-medium whitespace-nowrap">Acties</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((project) => (
-              <tr key={project.id} className="border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.02)]">
-                <td className="px-3 py-2">
-                  {onEditProject ? (
-                    <button onClick={() => onEditProject(project.id)} className="text-accent-teal hover:opacity-80 font-medium cursor-pointer whitespace-nowrap">
-                      {project.projectNumber}
-                    </button>
-                  ) : (
-                    <Link to={`/admin/projects/${project.id}`} className="text-accent-teal hover:opacity-80 font-medium whitespace-nowrap">
-                      {project.projectNumber}
-                    </Link>
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  {onEditProject ? (
-                    <button onClick={() => onEditProject(project.id)} className="text-accent-teal hover:opacity-80 font-medium cursor-pointer whitespace-nowrap">
-                      {project.name || ''}
-                    </button>
-                  ) : (
-                    <Link to={`/admin/projects/${project.id}`} className="text-accent-teal hover:opacity-80 font-medium whitespace-nowrap">
-                      {project.name || ''}
-                    </Link>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-text-primary">{project.klant?.name || ''}</td>
-                <td className="px-3 py-2 text-text-secondary text-right whitespace-nowrap">{formatDate(project.startDate)}</td>
-                <td className="px-3 py-2 text-text-secondary text-right whitespace-nowrap">{formatDate(project.endDate)}</td>
-                <td className="px-3 py-2">
-                  <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${
-                    project.status === 'active'
-                      ? 'bg-green-500/15 text-green-400'
-                      : 'bg-gray-500/15 text-gray-400'
-                  }`}>
-                    {project.status === 'active' ? 'Actief' : 'Afgerond'}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-text-secondary">{project._count?.activations ?? 0}</td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">
-                  <button
-                    onClick={() => setDeletingProject(project)}
-                    className="text-red-400 hover:opacity-80 text-sm cursor-pointer"
-                  >
-                    Verwijder
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {projects.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-text-muted">
-                  {showAll ? 'Nog geen projecten.' : 'Geen actieve projecten.'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Actieve projecten */}
+      {renderTable(actief, 'Geen actieve projecten.')}
+
+      {/* Afgeronde projecten — apart onderaan */}
+      {afgerond.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-[rgba(255,255,255,0.4)] mb-3">
+            Afgerond <span className="text-[rgba(255,255,255,0.3)] font-normal normal-case">({afgerond.length})</span>
+          </h2>
+          {renderTable(afgerond, '')}
+        </div>
+      )}
 
       <ConfirmDialog
         isOpen={!!deletingProject}

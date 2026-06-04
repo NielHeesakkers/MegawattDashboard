@@ -15,6 +15,9 @@ import EmailShareModal from './EmailShareModal';
 import { OrganigramSkeleton } from '../ui/Skeleton';
 import KlantenManager from '../admin/KlantenManager';
 import ToeleveranciersManager from '../admin/ToeleveranciersManager';
+import ContactenManager from '../admin/ContactenManager';
+import Sidebar from './Sidebar';
+import { fetchToeleveranciers, createToeleverancier, updateToeleverancier, deleteToeleverancier, refreshToeleverancierLogo, Toeleverancier } from '../../api';
 import ProjectList from '../admin/ProjectList';
 import ProjectForm from '../admin/ProjectForm';
 import SuperchargerManager from '../admin/SuperchargerManager';
@@ -29,7 +32,8 @@ function MegawattLogo() {
   );
 }
 
-type ViewMode = 'dashboard' | 'klantteams' | 'klanten' | 'toeleveranciers' | 'planning-projecten' | 'planning-klanten' | 'planning-superchargers' | 'locatie-lijst' | 'locatie-projecten';
+type ViewMode = 'dashboard' | 'klantteams' | 'klanten' | 'toeleveranciers' | 'projecten-actief' | 'projecten-afgerond' | 'projecten-geannuleerd' | 'locaties' | 'superchargers';
+type ProjectStatusFilter = 'active' | 'completed' | 'cancelled';
 
 type OrgBranch =
   | { kind: 'team'; team: Team }
@@ -41,11 +45,16 @@ function pathToView(pathname: string): ViewMode {
   if (pathname.startsWith('/klantteams')) return 'klantteams';
   if (pathname.startsWith('/contacten/klanten') || pathname === '/klanten') return 'klanten';
   if (pathname.startsWith('/contacten/toeleveranciers') || pathname === '/toeleveranciers') return 'toeleveranciers';
-  if (pathname.startsWith('/planning/projecten')) return 'planning-projecten';
-  if (pathname.startsWith('/planning/superchargers')) return 'planning-superchargers';
-  if (pathname.startsWith('/planning/klanten')) return 'planning-klanten';
-  if (pathname.startsWith('/locatie/projecten')) return 'locatie-projecten';
-  if (pathname.startsWith('/locatie/locaties')) return 'locatie-lijst';
+  if (pathname.startsWith('/projecten/afgerond')) return 'projecten-afgerond';
+  if (pathname.startsWith('/projecten/geannuleerd')) return 'projecten-geannuleerd';
+  if (pathname.startsWith('/projecten')) return 'projecten-actief';
+  if (pathname.startsWith('/superchargers')) return 'superchargers';
+  if (pathname.startsWith('/locaties')) return 'locaties';
+  // Legacy redirects
+  if (pathname.startsWith('/planning/projecten') || pathname.startsWith('/locatie/projecten')) return 'projecten-actief';
+  if (pathname.startsWith('/planning/superchargers')) return 'superchargers';
+  if (pathname.startsWith('/locatie/locaties')) return 'locaties';
+  if (pathname.startsWith('/planning/klanten')) return 'klanten';
   return 'dashboard';
 }
 
@@ -55,11 +64,11 @@ function viewToPath(mode: ViewMode): string {
     case 'klantteams': return '/klantteams';
     case 'klanten': return '/contacten/klanten';
     case 'toeleveranciers': return '/contacten/toeleveranciers';
-    case 'planning-projecten': return '/planning/projecten';
-    case 'planning-klanten': return '/contacten/klanten';
-    case 'planning-superchargers': return '/planning/superchargers';
-    case 'locatie-projecten': return '/locatie/projecten';
-    case 'locatie-lijst': return '/locatie/locaties';
+    case 'projecten-actief': return '/projecten/actief';
+    case 'projecten-afgerond': return '/projecten/afgerond';
+    case 'projecten-geannuleerd': return '/projecten/geannuleerd';
+    case 'superchargers': return '/superchargers';
+    case 'locaties': return '/locaties';
     default: return '/';
   }
 }
@@ -79,13 +88,20 @@ export default function OrganigramPage() {
   const params = useParams();
 
   const viewMode = pathToView(location.pathname);
-  const editingProjectId = location.pathname.startsWith('/planning/projecten/')
-    ? parseEditId(params.projectId ?? (location.pathname.endsWith('/new') ? 'new' : undefined))
+  // Detail paths exclude filter sub-paths like /projecten/actief
+  const FILTER_PATHS = ['/projecten/actief', '/projecten/afgerond', '/projecten/geannuleerd'];
+  const isProjectDetailPath = (
+    (location.pathname.startsWith('/projecten/') && !FILTER_PATHS.includes(location.pathname))
+    || location.pathname.startsWith('/planning/projecten/')
+    || location.pathname.startsWith('/locatie/projecten/')
+  );
+  const isLocationDetailPath = location.pathname.startsWith('/locaties/')
+    || location.pathname.startsWith('/locatie/locaties/');
+  const editingProjectId = isProjectDetailPath
+    ? parseEditId(params.projectId ?? params.locProjectId ?? (location.pathname.endsWith('/new') ? 'new' : undefined))
     : undefined;
-  const editingLocProjectId = location.pathname.startsWith('/locatie/projecten/')
-    ? parseEditId(params.locProjectId ?? (location.pathname.endsWith('/new') ? 'new' : undefined))
-    : undefined;
-  const editingLocationId = location.pathname.startsWith('/locatie/locaties/')
+  const editingLocProjectId = editingProjectId; // alias voor unified projecten
+  const editingLocationId = isLocationDetailPath
     ? parseEditId(params.locationId ?? (location.pathname.endsWith('/new') ? 'new' : undefined))
     : undefined;
 
@@ -93,7 +109,7 @@ export default function OrganigramPage() {
     navigate(viewToPath(mode));
   }, [navigate]);
 
-  // Eenmalige migratie: oude localStorage-state → nieuwe URL zodat gebruikers op hun laatste pagina belanden.
+  // Eenmalige migratie: oude localStorage-state opruimen + naar matching URL navigeren waar mogelijk.
   useEffect(() => {
     if (location.pathname !== '/') return;
     const saved = localStorage.getItem('megawatt-view-mode');
@@ -101,11 +117,27 @@ export default function OrganigramPage() {
     localStorage.removeItem('megawatt-view-mode');
     const legacyLoc = localStorage.getItem('megawatt-editing-location');
     localStorage.removeItem('megawatt-editing-location');
-    const mode = saved === 'locatie-opdrachten' ? 'locatie-projecten' : saved as ViewMode;
-    if (mode === 'locatie-lijst' && legacyLoc) {
-      navigate(`/locatie/locaties/${legacyLoc === 'new' ? 'new' : legacyLoc}`, { replace: true });
-    } else {
-      const target = viewToPath(mode);
+
+    // Map legacy modes naar huidige URL-paden.
+    const LEGACY_MAP: Record<string, string> = {
+      'locatie-lijst': legacyLoc ? `/locaties/${legacyLoc === 'new' ? 'new' : legacyLoc}` : '/locaties',
+      'locatie-opdrachten': '/projecten/actief',
+      'locatie-projecten': '/projecten/actief',
+    };
+    const legacyTarget = LEGACY_MAP[saved];
+    if (legacyTarget) {
+      navigate(legacyTarget, { replace: true });
+      return;
+    }
+
+    // Anders: probeer als huidige ViewMode.
+    const VALID: readonly ViewMode[] = [
+      'dashboard', 'klantteams', 'klanten', 'toeleveranciers',
+      'projecten-actief', 'projecten-afgerond', 'projecten-geannuleerd',
+      'locaties', 'superchargers',
+    ];
+    if ((VALID as readonly string[]).includes(saved)) {
+      const target = viewToPath(saved as ViewMode);
       if (target !== '/') navigate(target, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -114,12 +146,12 @@ export default function OrganigramPage() {
   useEffect(() => {
     if (!isAuthenticated) return;
     const isInternView = viewMode === 'dashboard' || viewMode === 'klantteams';
-    const isPlanView = viewMode.startsWith('planning-') || viewMode === 'klanten' || viewMode === 'toeleveranciers';
-    const isLocatieView = viewMode === 'locatie-lijst' || viewMode === 'locatie-projecten';
+    const isPlanView = viewMode.startsWith('projecten-') || viewMode === 'klanten' || viewMode === 'toeleveranciers' || viewMode === 'superchargers';
+    const isLocatieView = viewMode === 'locaties';
     const fallback = (): ViewMode | null => {
       if (hasTab('intern')) return 'dashboard';
       if (hasTab('planning')) return 'klanten';
-      if (hasTab('locatie')) return 'locatie-lijst';
+      if (hasTab('locatie')) return 'locaties';
       return null;
     };
     if (isInternView && !hasTab('intern')) {
@@ -183,8 +215,8 @@ export default function OrganigramPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
-  const isPlanningView = viewMode.startsWith('planning-');
-  const isLocatieView = viewMode === 'locatie-lijst' || viewMode === 'locatie-projecten';
+  const isPlanningView = viewMode.startsWith('projecten-') || viewMode === 'superchargers';
+  const isLocatieView = viewMode === 'locaties';
   const isContactenView = viewMode === 'klanten' || viewMode === 'toeleveranciers';
 
   // Close dropdown menus on outside click
@@ -362,9 +394,21 @@ export default function OrganigramPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-[rgba(15,31,29,0.9)] backdrop-blur-md border-b border-[rgba(255,255,255,0.08)]">
+    <div className="min-h-screen flex">
+      <Sidebar
+        viewMode={viewMode}
+        onViewMode={handleViewMode}
+        hasTab={hasTab}
+        isAdmin={isAdmin}
+        username={username}
+        onExportPdf={handleExportPdf}
+        onExportJpg={handleExportJpg}
+        onEmailShare={() => setEmailShareOpen(true)}
+        onLogout={logout}
+      />
+      <div className="flex-1 min-w-0 h-screen overflow-auto">
+      {/* Old header (verborgen, wordt vervangen door sidebar) */}
+      <header className="hidden sticky top-0 z-40 bg-[rgba(15,31,29,0.9)] backdrop-blur-md border-b border-[rgba(255,255,255,0.08)]">
         <div className="mx-auto px-6 py-3 flex flex-col sm:flex-row items-center gap-4">
           <div className="flex-shrink-0 flex items-center gap-2">
             <MegawattLogo />
@@ -629,70 +673,58 @@ export default function OrganigramPage() {
       </header>
 
       {/* View content */}
-      {viewMode === 'locatie-lijst' ? (
+      {viewMode === 'locaties' ? (
         editingLocationId !== undefined ? (
           <LocatieDetailPage
             locationId={editingLocationId}
-            onBack={() => navigate('/locatie/locaties')}
-            onDeleted={() => navigate('/locatie/locaties')}
-            onCreated={(id) => navigate(`/locatie/locaties/${id}`, { replace: true })}
+            onBack={() => navigate('/locaties')}
+            onDeleted={() => navigate('/locaties')}
+            onCreated={(id) => navigate(`/locaties/${id}`, { replace: true })}
           />
         ) : (
-          <LocatieListPage onOpenDetail={(id) => navigate(`/locatie/locaties/${id}`)} />
+          <LocatieListPage onOpenDetail={(id) => navigate(`/locaties/${id}`)} />
         )
-      ) : viewMode === 'locatie-projecten' ? (
+      ) : viewMode.startsWith('projecten-') ? (
         editingLocProjectId !== undefined ? (
           <LocProjectForm
             projectId={editingLocProjectId}
-            onBack={() => navigate('/locatie/projecten')}
-            onCreated={(id) => navigate(`/locatie/projecten/${id}`, { replace: true })}
-            onDeleted={() => navigate('/locatie/projecten')}
-            onOpenLocation={(id) => navigate(`/locatie/locaties/${id}`)}
+            onCreated={(id) => navigate(`/projecten/${id}`, { replace: true })}
+            onDeleted={() => navigate(viewToPath(viewMode))}
+            onOpenLocation={(id) => navigate(`/locaties/${id}`)}
           />
         ) : (
           <LocProjectList
-            onEdit={(id) => navigate(`/locatie/projecten/${id}`)}
-            onNew={() => navigate('/locatie/projecten/new')}
+            statusFilter={viewMode === 'projecten-afgerond' ? 'completed' : viewMode === 'projecten-geannuleerd' ? 'cancelled' : 'active'}
+            onEdit={(id) => navigate(`/projecten/${id}`)}
+            onNew={() => navigate('/projecten/new')}
           />
         )
+      ) : viewMode === 'superchargers' ? (
+        <div className="px-6 py-6">
+          <SuperchargerManager />
+        </div>
       ) : viewMode === 'klanten' ? (
-        <div className="mx-auto max-w-5xl px-6 py-8">
-          <KlantenManager />
-        </div>
+        <KlantenManager basePath="/contacten/klanten" />
       ) : viewMode === 'toeleveranciers' ? (
-        <div className="mx-auto max-w-5xl px-6 py-8">
-          <ToeleveranciersManager />
-        </div>
-      ) : isPlanningView ? (
-        <div className="mx-auto max-w-5xl px-6 py-8">
-          {viewMode === 'planning-klanten' ? (
-            <KlantenManager />
-          ) : viewMode === 'planning-superchargers' ? (
-            <SuperchargerManager />
-          ) : editingProjectId === 'new' ? (
-            <ProjectForm
-              onBack={() => navigate('/planning/projecten')}
-              onCreated={(id: number) => navigate(`/planning/projecten/${id}`, { replace: true })}
-            />
-          ) : editingProjectId !== undefined ? (
-            <ProjectForm
-              projectId={editingProjectId}
-              onBack={() => navigate('/planning/projecten')}
-              onCreated={(id: number) => navigate(`/planning/projecten/${id}`, { replace: true })}
-            />
-          ) : (
-            <ProjectList
-              onEditProject={(id: number) => navigate(`/planning/projecten/${id}`)}
-              onNewProject={() => navigate('/planning/projecten/new')}
-            />
-          )}
-        </div>
+        <ContactenManager<Toeleverancier>
+          title="Toeleveranciers"
+          singular="toeleverancier"
+          newButtonLabel="+ Toeleverancier"
+          basePath="/contacten/toeleveranciers"
+          fetchAll={fetchToeleveranciers}
+          create={createToeleverancier}
+          update={updateToeleverancier}
+          remove={deleteToeleverancier}
+          refreshLogo={refreshToeleverancierLogo}
+          showSpecialismes
+          showProjectsCount
+        />
       ) : viewMode === 'klantteams' ? (
         <KlantteamsView searchQuery={searchQuery} captureRef={klantteamsCaptureRef} />
       ) : (
         <>
           {/* Organigram — parent-child flex structure, lines always connected */}
-          <div ref={captureRef} id="organigram-capture" className="mx-auto px-6 py-8 overflow-x-auto">
+          <div ref={captureRef} id="organigram-capture" className="mx-auto px-6 py-8 inline-block min-w-full">
             {/* CEO */}
             <div className="flex flex-col items-center">
               {ceo && (
@@ -820,6 +852,7 @@ export default function OrganigramPage() {
           return all.filter((c) => { if (seen.has(c.email)) return false; seen.add(c.email); return true; });
         })()}
       />
+      </div>
     </div>
   );
 }

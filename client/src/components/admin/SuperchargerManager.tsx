@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Supercharger, fetchSuperchargers, createSupercharger, updateSupercharger, deleteSupercharger } from '../../api';
-import Modal from '../ui/Modal';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
+import { formatPhone } from '../../shared/phone';
 
 interface SuperchargerFormData {
   firstName: string;
@@ -133,14 +133,6 @@ export default function SuperchargerManager() {
     return new Date(d).toLocaleDateString('nl-NL');
   };
 
-  const formatPhone = (p: string) => {
-    // Add dash after first 2 digits if missing (e.g. 06243... → 06-243...)
-    const digits = p.replace(/\s/g, '');
-    if (/^\d{2}[^-]/.test(digits) && !digits.includes('-')) {
-      return digits.slice(0, 2) + '-' + digits.slice(2);
-    }
-    return p;
-  };
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -181,15 +173,140 @@ export default function SuperchargerManager() {
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
+  // ── Inline detail/edit view ──────────────────────────────────────────────
+  if (showForm) {
+    const headerName = editingId
+      ? `${form.firstName || ''} ${form.lastName || ''}`.trim() || 'Supercharger bewerken'
+      : 'Nieuwe supercharger';
+    return (
+      <div>
+        {/* Breadcrumb */}
+        <button onClick={() => setShowForm(false)} className="flex items-center gap-1.5 text-white/40 hover:text-white text-sm transition-colors cursor-pointer mb-4">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+          </svg>
+          Superchargers
+        </button>
+        <h1 className="text-2xl font-bold text-text-primary mb-6">{headerName}</h1>
+
+        <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl">
+          {/* Photo + Name row */}
+          <div className="flex gap-5 items-start">
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoChange} className="hidden" />
+            <div
+              className="shrink-0 w-[140px] h-[140px] rounded-full overflow-hidden bg-bg-dark border-2 border-white/10 hover:border-accent-gold cursor-pointer transition-colors group relative"
+              onClick={() => !photoPreview && fileRef.current?.click()}
+            >
+              {photoPreview ? (
+                <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <svg className="w-8 h-8 text-text-secondary" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                  </svg>
+                </div>
+              )}
+              <div className={`absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity ${photoPreview ? 'gap-6' : ''}`}>
+                <button type="button" onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }} className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors" title="Nieuwe foto">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" /></svg>
+                </button>
+                {photoPreview && (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setPhotoPreview(null); setPhotoFile(null); setRemovePhoto(true); }} className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors" title="Foto verwijderen">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex-1 space-y-3">
+              <div>
+                <label className="block text-text-secondary text-sm mb-1">Voornaam *</label>
+                <input type="text" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold" required />
+              </div>
+              <div>
+                <label className="block text-text-secondary text-sm mb-1">Achternaam *</label>
+                <input type="text" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold" required />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-text-secondary text-sm mb-1">Functie *</label>
+            {customFunction ? (
+              <div className="flex gap-2">
+                <input type="text" value={form.function} onChange={(e) => setForm({ ...form, function: e.target.value })} placeholder="Vul functie in" className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white placeholder-text-secondary focus:outline-none focus:border-accent-gold" required />
+                <button type="button" onClick={() => { setCustomFunction(false); setForm({ ...form, function: 'Supercharger' }); }} className="px-2 text-text-secondary hover:text-white shrink-0" title="Terug naar opties">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            ) : (
+              <select value={form.function} onChange={(e) => {
+                if (e.target.value === '__custom__') { setCustomFunction(true); setForm({ ...form, function: '' }); }
+                else { setForm({ ...form, function: e.target.value }); }
+              }} className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold" required>
+                {functionPresets.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                <option value="__custom__">Anders...</option>
+              </select>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-text-secondary text-sm mb-1">E-mail</label>
+              <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold" />
+            </div>
+            <div>
+              <label className="block text-text-secondary text-sm mb-1">Telefoon</label>
+              <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} onBlur={(e) => { const f = formatPhone(e.target.value); if (f !== e.target.value) setForm(prev => ({ ...prev, phone: f })); }} className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-text-secondary text-sm mb-1">Geboortedatum</label>
+            <input type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold" />
+          </div>
+
+          <div className="flex items-center justify-between gap-3 pt-4 border-t border-[rgba(255,255,255,0.08)] mt-6">
+            <div>
+              {editingId && (
+                <button type="button" onClick={() => { setShowForm(false); setDeletingItem(superchargers.find(s => s.id === editingId) ?? null); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm cursor-pointer">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916" /></svg>
+                  Verwijderen
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg bg-white/10 text-text-primary hover:bg-white/20 transition-colors cursor-pointer">
+                Annuleren
+              </button>
+              <button type="submit" disabled={saving} className="px-5 py-2 rounded-lg bg-accent text-bg-dark font-semibold hover:brightness-110 transition-all shadow-[0_2px_8px_rgba(201,168,76,0.3)] disabled:opacity-60 flex items-center gap-2 cursor-pointer">
+                {saving && <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
+                {saving ? 'Opslaan…' : 'Opslaan'}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <ConfirmDialog
+          isOpen={!!deletingItem}
+          onClose={() => setDeletingItem(null)}
+          onConfirm={handleDelete}
+          title="Supercharger verwijderen?"
+          message={`Weet je zeker dat je "${deletingItem?.firstName} ${deletingItem?.lastName}" wilt verwijderen?`}
+        />
+      </div>
+    );
+  }
+
+  // ── Lijst view ───────────────────────────────────────────────────────────
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-text-primary">Superchargers</h1>
         <button
           onClick={openCreate}
-          className="flex items-center gap-1.5 h-7 px-3 rounded-lg ring-1 ring-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] text-[12px] font-medium hover:bg-[rgba(255,255,255,0.12)] hover:text-white transition-all duration-150 cursor-pointer"
+          className="flex items-center gap-1.5 h-7 px-3 rounded-lg ring-1 ring-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] text-[12px] font-medium hover:bg-accent hover:text-[#1a3a38] hover:ring-accent transition-all duration-150 cursor-pointer"
         >
-          + Supercharger toevoegen
+          + Supercharger
         </button>
       </div>
 
@@ -222,18 +339,16 @@ export default function SuperchargerManager() {
           </thead>
           <tbody>
             {sorted.map((item) => (
-              <tr key={item.id} className="border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.02)]">
+              <tr key={item.id} className="h-14 border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.02)] align-middle">
                 <td className="px-3 py-2">
                   <button onClick={() => openEdit(item)} className="cursor-pointer">
-                    <div className="w-7 h-7 rounded-full overflow-hidden bg-bg-dark shrink-0">
+                    <div className="w-9 h-9 rounded overflow-hidden bg-white shrink-0 flex items-center justify-center">
                       {item.photo ? (
                         <img src={item.photo} alt="" className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <svg className="w-3.5 h-3.5 text-text-secondary" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                          </svg>
-                        </div>
+                        <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                        </svg>
                       )}
                     </div>
                   </button>
@@ -312,156 +427,6 @@ export default function SuperchargerManager() {
         </table>
       </div>
 
-      {/* Create/Edit modal */}
-      <Modal
-        isOpen={showForm}
-        onClose={() => setShowForm(false)}
-        title={editingId ? 'Supercharger bewerken' : 'Supercharger toevoegen'}
-        maxWidth="max-w-xl"
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Photo + Name row */}
-          <div className="flex gap-5 items-start">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handlePhotoChange}
-              className="hidden"
-            />
-            <div
-              className="shrink-0 w-[140px] h-[140px] rounded-full overflow-hidden bg-bg-dark border-2 border-white/10 hover:border-accent-gold cursor-pointer transition-colors group relative"
-              onClick={() => !photoPreview && fileRef.current?.click()}
-            >
-              {photoPreview ? (
-                <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <svg className="w-8 h-8 text-text-secondary" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                  </svg>
-                </div>
-              )}
-              <div className={`absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity ${photoPreview ? 'gap-6' : ''}`}>
-                <button type="button" onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }} className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors" title="Nieuwe foto">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
-                  </svg>
-                </button>
-                {photoPreview && (
-                  <button type="button" onClick={(e) => { e.stopPropagation(); setPhotoPreview(null); setPhotoFile(null); setRemovePhoto(true); }} className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors" title="Foto verwijderen">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="flex-1 space-y-3">
-              <div>
-                <label className="block text-text-secondary text-sm mb-1">Voornaam *</label>
-                <input
-                  type="text" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-text-secondary text-sm mb-1">Achternaam *</label>
-                <input
-                  type="text" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
-                  required
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-text-secondary text-sm mb-1">Functie *</label>
-            {customFunction ? (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={form.function}
-                  onChange={(e) => setForm({ ...form, function: e.target.value })}
-                  placeholder="Vul functie in"
-                  className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white placeholder-text-secondary focus:outline-none focus:border-accent-gold"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => { setCustomFunction(false); setForm({ ...form, function: 'Supercharger' }); }}
-                  className="px-2 text-text-secondary hover:text-white shrink-0"
-                  title="Terug naar opties"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-            ) : (
-              <select
-                value={form.function}
-                onChange={(e) => {
-                  if (e.target.value === '__custom__') {
-                    setCustomFunction(true);
-                    setForm({ ...form, function: '' });
-                  } else {
-                    setForm({ ...form, function: e.target.value });
-                  }
-                }}
-                className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
-                required
-              >
-                {functionPresets.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-                <option value="__custom__">Anders...</option>
-              </select>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-text-secondary text-sm mb-1">E-mail</label>
-              <input
-                type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
-              />
-            </div>
-            <div>
-              <label className="block text-text-secondary text-sm mb-1">Telefoon</label>
-              <input
-                type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-text-secondary text-sm mb-1">Geboortedatum</label>
-            <input
-              type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg bg-white/10 text-text-primary hover:bg-white/20 transition-colors cursor-pointer">
-              Annuleren
-            </button>
-            <button type="submit" disabled={saving} className="px-5 py-2 rounded-lg bg-accent text-bg-dark font-semibold hover:brightness-110 transition-all shadow-[0_2px_8px_rgba(201,168,76,0.3)] disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer">
-              {saving && (
-                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              )}
-              {saving ? 'Opslaan...' : 'Opslaan'}
-            </button>
-          </div>
-        </form>
-      </Modal>
 
       <ConfirmDialog
         isOpen={!!deletingItem}

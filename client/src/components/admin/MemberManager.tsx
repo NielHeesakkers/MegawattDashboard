@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { formatPhone } from '../../shared/phone';
 import { fetchTeams, fetchMembers, fetchExecutives, createMember, updateMember, deleteMember, reorderMembers, updateTeam, deleteTeam, Team, Member, Executive } from '../../api';
 import {
   DndContext,
@@ -355,7 +356,7 @@ export default function MemberManager() {
     const reorderedIds = new Map(reordered.map((m, i) => [m.id, i]));
     setMembers((prev) =>
       prev.map((m) => (reorderedIds.has(m.id) ? { ...m, order: reorderedIds.get(m.id)! } : m))
-        .sort((a, b) => a.teamId - b.teamId || a.order - b.order)
+        .sort((a, b) => (a.teamId ?? 0) - (b.teamId ?? 0) || a.order - b.order)
     );
 
     await reorderMembers(reordered.map((m, i) => ({ id: m.id, order: i })));
@@ -573,6 +574,7 @@ export default function MemberManager() {
             <label className="block text-text-secondary text-sm mb-1">Telefoon</label>
             <input
               type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              onBlur={(e) => { const f = formatPhone(e.target.value); if (f !== e.target.value) setForm(prev => ({ ...prev, phone: f })); }}
               className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
             />
           </div>

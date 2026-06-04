@@ -18,6 +18,7 @@ import ToeleveranciersManager from './components/admin/ToeleveranciersManager';
 import ProjectList from './components/admin/ProjectList';
 import ProjectForm from './components/admin/ProjectForm';
 import BriefingPage from './components/BriefingPage';
+import ResetPasswordPage from './components/ui/ResetPasswordPage';
 
 export default function App() {
   return (
@@ -27,24 +28,35 @@ export default function App() {
       <Routes>
         {/* Public briefing page (no auth) */}
         <Route path="/briefing/:token" element={<BriefingPage />} />
+        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
         {/* Public dashboard — dezelfde OrganigramPage bedient elke sectie, route bepaalt de view */}
         <Route path="/" element={<OrganigramPage />} />
         <Route path="/klantteams" element={<OrganigramPage />} />
+        <Route path="/contacten/klanten" element={<OrganigramPage />} />
+        <Route path="/contacten/klanten/:contactId" element={<OrganigramPage />} />
+        <Route path="/contacten/toeleveranciers" element={<OrganigramPage />} />
+        <Route path="/contacten/toeleveranciers/:contactId" element={<OrganigramPage />} />
+        <Route path="/projecten" element={<OrganigramPage />} />
+        <Route path="/projecten/actief" element={<OrganigramPage />} />
+        <Route path="/projecten/afgerond" element={<OrganigramPage />} />
+        <Route path="/projecten/geannuleerd" element={<OrganigramPage />} />
+        <Route path="/projecten/new" element={<OrganigramPage />} />
+        <Route path="/projecten/:projectId" element={<OrganigramPage />} />
+        <Route path="/superchargers" element={<OrganigramPage />} />
+        <Route path="/locaties" element={<OrganigramPage />} />
+        <Route path="/locaties/new" element={<OrganigramPage />} />
+        <Route path="/locaties/:locationId" element={<OrganigramPage />} />
+        {/* Legacy redirects — automatically resolved by pathToView */}
         <Route path="/klanten" element={<OrganigramPage />} />
         <Route path="/toeleveranciers" element={<OrganigramPage />} />
-        <Route path="/contacten/klanten" element={<OrganigramPage />} />
-        <Route path="/contacten/toeleveranciers" element={<OrganigramPage />} />
         <Route path="/planning/projecten" element={<OrganigramPage />} />
-        <Route path="/planning/projecten/new" element={<OrganigramPage />} />
         <Route path="/planning/projecten/:projectId" element={<OrganigramPage />} />
         <Route path="/planning/superchargers" element={<OrganigramPage />} />
-        <Route path="/locatie/projecten" element={<OrganigramPage />} />
-        <Route path="/locatie/projecten/new" element={<OrganigramPage />} />
-        <Route path="/locatie/projecten/:locProjectId" element={<OrganigramPage />} />
         <Route path="/locatie/locaties" element={<OrganigramPage />} />
-        <Route path="/locatie/locaties/new" element={<OrganigramPage />} />
         <Route path="/locatie/locaties/:locationId" element={<OrganigramPage />} />
+        <Route path="/locatie/projecten" element={<OrganigramPage />} />
+        <Route path="/locatie/projecten/:locProjectId" element={<OrganigramPage />} />
 
         {/* Admin panel */}
         <Route path="/admin" element={<AdminLayout />}>

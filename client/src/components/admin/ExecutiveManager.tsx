@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { fetchExecutives, createExecutive, updateExecutive, deleteExecutive, Executive } from '../../api';
+import { formatPhone } from '../../shared/phone';
 import Modal from '../ui/Modal';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
@@ -222,6 +223,7 @@ export default function ExecutiveManager() {
             <label className="block text-text-secondary text-sm mb-1">Telefoon</label>
             <input
               type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              onBlur={(e) => { const f = formatPhone(e.target.value); if (f !== e.target.value) setForm(prev => ({ ...prev, phone: f })); }}
               className="w-full px-3 py-2 rounded-lg bg-bg-dark border border-white/10 text-white focus:outline-none focus:border-accent-gold"
             />
           </div>

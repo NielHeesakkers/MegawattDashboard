@@ -1,12 +1,15 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { login as apiLogin } from '../api';
 
+type UserRole = 'admin' | 'superuser' | 'user' | null;
+
 interface AuthContextType {
   isAuthenticated: boolean;
   username: string | null;
-  role: 'admin' | 'user' | null;
+  role: UserRole;
   allowedTabs: string[];
   isAdmin: boolean;
+  isSuperuser: boolean;
   hasTab: (tab: string) => boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
@@ -17,13 +20,13 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
-  const [role, setRole] = useState<'admin' | 'user' | null>(null);
+  const [role, setRole] = useState<UserRole>(null);
   const [allowedTabs, setAllowedTabs] = useState<string[]>([]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     const savedUsername = localStorage.getItem('username');
-    const savedRole = localStorage.getItem('role') as 'admin' | 'user' | null;
+    const savedRole = localStorage.getItem('role') as UserRole;
     const savedTabs = localStorage.getItem('allowedTabs');
     if (token && savedUsername) {
       setIsAuthenticated(true);
@@ -41,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('allowedTabs', JSON.stringify(data.allowedTabs));
     setIsAuthenticated(true);
     setUsername(data.username);
-    setRole(data.role as 'admin' | 'user');
+    setRole(data.role as UserRole);
     setAllowedTabs(data.allowedTabs);
   };
 
@@ -57,10 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isAdmin = role === 'admin';
+  const isSuperuser = role === 'superuser';
   const hasTab = (tab: string) => allowedTabs.includes(tab);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, username, role, allowedTabs, isAdmin, hasTab, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, username, role, allowedTabs, isAdmin, isSuperuser, hasTab, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

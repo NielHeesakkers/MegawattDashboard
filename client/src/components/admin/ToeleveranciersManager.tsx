@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchToeleveranciers, createToeleverancier, updateToeleverancier, deleteToeleverancier, Toeleverancier, fetchSpecialismes, createSpecialisme, deleteSpecialisme, Specialisme } from '../../api';
+import { fetchToeleveranciers, createToeleverancier, updateToeleverancier, deleteToeleverancier, refreshToeleverancierLogo, Toeleverancier, fetchSpecialismes, createSpecialisme, deleteSpecialisme, Specialisme } from '../../api';
 import ContactenManager from './ContactenManager';
 import { useToast } from '../ui/Toast';
 
@@ -10,7 +10,7 @@ function InstellingenTab() {
   const [newNaam, setNewNaam] = useState('');
   const [adding, setAdding] = useState(false);
   const [showInput, setShowInput] = useState(false);
-  const { showToast } = useToast();
+  const toast = useToast();
 
   useEffect(() => {
     fetchSpecialismes().then(setSpecialismes);
@@ -24,9 +24,9 @@ function InstellingenTab() {
       setSpecialismes((prev) => [...prev, created].sort((a, b) => a.naam.localeCompare(b.naam)));
       setNewNaam('');
       setShowInput(false);
-      showToast('Specialisme toegevoegd', 'success');
+      toast.success('Specialisme toegevoegd');
     } catch {
-      showToast('Specialisme bestaat al', 'error');
+      toast.error('Specialisme bestaat al');
     } finally {
       setAdding(false);
     }
@@ -35,7 +35,7 @@ function InstellingenTab() {
   async function handleDelete(id: number) {
     await deleteSpecialisme(id);
     setSpecialismes((prev) => prev.filter((s) => s.id !== id));
-    showToast('Specialisme verwijderd', 'success');
+    toast.success('Specialisme verwijderd');
   }
 
   return (
@@ -137,12 +137,14 @@ export default function ToeleveranciersManager() {
         <ContactenManager<Toeleverancier>
           title="Toeleveranciers"
           singular="toeleverancier"
-          newButtonLabel="+ Nieuwe toeleverancier"
+          newButtonLabel="+ Toeleverancier"
           fetchAll={fetchToeleveranciers}
           create={createToeleverancier}
           update={updateToeleverancier}
           remove={deleteToeleverancier}
+          refreshLogo={refreshToeleverancierLogo}
           showSpecialismes
+          showProjectsCount
         />
       ) : (
         <InstellingenTab />

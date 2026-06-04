@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../ui/Toast';
-import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
+import { useAutoSave, SaveIndicator } from '../../hooks/useAutoSave';
 import {
   fetchLocation, createLocation, updateLocation, deleteLocation, suggestAdres, AdresSuggestion,
   Location, LocationWriteInput, OmgevingType, Orientatie, LocationPhoto,
@@ -52,7 +52,7 @@ function emptyForm(): FormState {
     lat: null, lng: null,
     omgevingType: 'centrum', orientatie: 'N', eigendomType: 'particulier',
     vergunningNodig: false, vergunningLink: null, truckBereikbaar: false,
-    geschiktActivatie: false, geschiktSampling: false, geschiktAnder: null,
+    geschiktActivatie: false, geschiktSampling: false, geschiktHotspot: false, geschiktAnder: null,
     stroom: false, verlichting: false,
     lengte: null, breedte: null, m2: null,
     notities: '',
@@ -68,7 +68,7 @@ function fromLocation(loc: Location): FormState {
     lat: loc.lat, lng: loc.lng,
     omgevingType: loc.omgevingType, orientatie: loc.orientatie, eigendomType: loc.eigendomType,
     vergunningNodig: loc.vergunningNodig, vergunningLink: loc.vergunningLink, truckBereikbaar: loc.truckBereikbaar,
-    geschiktActivatie: loc.geschiktActivatie, geschiktSampling: loc.geschiktSampling, geschiktAnder: loc.geschiktAnder,
+    geschiktActivatie: loc.geschiktActivatie, geschiktSampling: loc.geschiktSampling, geschiktHotspot: loc.geschiktHotspot, geschiktAnder: loc.geschiktAnder,
     stroom: loc.stroom, verlichting: loc.verlichting,
     lengte: loc.lengte, breedte: loc.breedte, m2: loc.m2,
     notities: loc.notities,
@@ -85,7 +85,6 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
   const [form, setForm] = useState<FormState>(emptyForm());
   const [originalLocation, setOriginalLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(locationId !== 'new');
-  const [saving, setSaving] = useState(false);
   const [adresSuggestions, setAdresSuggestions] = useState<AdresSuggestion[]>([]);
   const adresDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -96,17 +95,6 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
       setForm(fromLocation(loc));
     }).finally(() => setLoading(false));
   }, [locationId]);
-
-  const isDirty = (() => {
-    const normalize = (s: FormState) => JSON.stringify({ ...s, photos: null, lat: null, lng: null });
-    if (locationId === 'new') {
-      return normalize(form) !== normalize(emptyForm());
-    }
-    if (!originalLocation) return false;
-    return normalize(form) !== normalize(fromLocation(originalLocation));
-  })();
-
-  useUnsavedChanges(isDirty);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -140,26 +128,19 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
   };
 
   const save = async () => {
-    setSaving(true);
-    try {
-      const { lat: _la, lng: _ln, photos: _ph, ...writeInput } = form;
-      if (locationId === 'new') {
-        const created = await createLocation(writeInput);
-        toast.success(`Locatie opgeslagen als ${created.code ?? 'nieuwe locatie'}`);
-        onCreated(created.id);
-      } else {
-        const updated = await updateLocation(locationId, writeInput);
-        setOriginalLocation(updated);
-        setForm(fromLocation(updated));
-        toast.success('Wijzigingen opgeslagen');
-      }
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || 'Opslaan mislukt');
-    } finally {
-      setSaving(false);
+    if (!form.naam.trim()) return; // Geen lege locaties aanmaken
+    const { lat: _la, lng: _ln, photos: _ph, ...writeInput } = form;
+    if (locationId === 'new') {
+      const created = await createLocation(writeInput);
+      onCreated(created.id);
+    } else {
+      const updated = await updateLocation(locationId, writeInput);
+      setOriginalLocation(updated);
     }
   };
+
+  // Auto-save bij elke form-wijziging
+  const saveStatus = useAutoSave(form, save, { enabled: !!form.naam.trim() });
 
   const del = async () => {
     if (locationId === 'new') return;
@@ -188,13 +169,13 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
 
   if (loading) return <div className="p-8 text-[rgba(255,255,255,0.5)]">Laden…</div>;
 
-  const locProjects = originalLocation?.locProjects ?? [];
+  const projects = originalLocation?.projects ?? [];
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-6">
       <div className="sticky top-0 z-20 -mx-6 px-6 py-3 mb-6 bg-[rgba(15,31,29,0.95)] backdrop-blur border-b border-[rgba(255,255,255,0.08)] flex items-center justify-between">
         <button onClick={() => {
-          if (isDirty && !confirm('Je hebt niet-opgeslagen wijzigingen. Toch terug?')) return;
+          if (saveStatus === 'saving' && !confirm('Bezig met opslaan — toch terug?')) return;
           onBack();
         }} className="text-accent text-sm hover:opacity-80 cursor-pointer">← Terug</button>
         <h1 className="text-white font-semibold truncate flex items-center gap-2">
@@ -203,13 +184,11 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
           )}
           {form.naam || 'Nieuwe locatie'}
         </h1>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+          <SaveIndicator status={saveStatus} />
           {locationId !== 'new' && (
             <button onClick={del} className="h-9 px-3 rounded-lg bg-red-500/10 ring-1 ring-red-500/20 text-red-400 text-[13px] font-medium hover:bg-red-500/20 cursor-pointer">Verwijderen</button>
           )}
-          <button onClick={save} disabled={saving} className="h-9 px-4 rounded-lg bg-accent-teal text-[#1a3a38] text-[13px] font-semibold hover:opacity-85 cursor-pointer disabled:opacity-50">
-            {saving ? 'Opslaan…' : 'Opslaan'}
-          </button>
         </div>
       </div>
 
@@ -284,7 +263,7 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
               );
             })()}
           </Field>
-          <Field label="Oriëntatie">
+          <Field label="Aanlooprichting">
             <select className={inputClass} value={form.orientatie} onChange={(e) => set('orientatie', e.target.value as Orientatie)}>
               {(['N', 'NO', 'O', 'ZO', 'Z', 'ZW', 'W', 'NW'] as const).map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
@@ -299,6 +278,9 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
           </label>
           <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer">
             <input type="checkbox" checked={form.geschiktSampling} onChange={(e) => set('geschiktSampling', e.target.checked)} /> Mass sampling
+          </label>
+          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer">
+            <input type="checkbox" checked={form.geschiktHotspot} onChange={(e) => set('geschiktHotspot', e.target.checked)} /> Hotspot sampling
           </label>
           <div className="flex items-center gap-2 flex-1 min-w-[200px]">
             <span className="text-[14px] text-white whitespace-nowrap">Ander:</span>
@@ -350,7 +332,7 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
         <LocatieContactsSection contacts={form.contacts} onChange={(contacts) => set('contacts', contacts)} />
       </Section>
 
-      <Section title="Kosten per dag">
+      <Section title="Inschatting Kosten per dag">
         <LocatieCostsSection costs={form.costs} onChange={(costs) => set('costs', costs)} />
       </Section>
 
@@ -363,15 +345,15 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
       <Section title="Projecten">
         {locationId === 'new' ? (
           <p className="text-[rgba(255,255,255,0.4)] text-[13px] italic">Projecten verschijnen hier nadat de locatie is opgeslagen en aan projecten is gekoppeld.</p>
-        ) : locProjects.length === 0 ? (
+        ) : projects.length === 0 ? (
           <p className="text-[rgba(255,255,255,0.4)] text-[13px] italic">Deze locatie is nog niet aan projecten gekoppeld.</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {locProjects.map((lp) => (
+            {projects.map((lp) => (
               <li key={lp.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.04)] ring-1 ring-[rgba(255,255,255,0.08)]">
-                <span className="text-[12px] font-mono text-accent-teal">{lp.locProject.projectNumber}</span>
-                <span className="text-white text-[14px]">{lp.locProject.name || '—'}</span>
-                <span className="text-[rgba(255,255,255,0.5)] text-[12px] ml-auto">{lp.locProject.klant.name}</span>
+                <span className="text-[12px] font-mono text-accent-teal">{lp.project.projectNumber}</span>
+                <span className="text-white text-[14px]">{lp.project.name || '—'}</span>
+                <span className="text-[rgba(255,255,255,0.5)] text-[12px] ml-auto">{lp.project.klant.name}</span>
               </li>
             ))}
           </ul>

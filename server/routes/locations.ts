@@ -60,9 +60,9 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       contacts: { orderBy: { order: 'asc' } },
       photos: { orderBy: { order: 'asc' } },
       costs: { orderBy: { order: 'asc' } },
-      locProjects: {
+      projects: {
         include: {
-          locProject: { include: { klant: { select: { id: true, name: true, logo: true } } } },
+          project: { include: { klant: { select: { id: true, name: true, logo: true } } } },
         },
         orderBy: { order: 'asc' },
       },
@@ -87,6 +87,7 @@ interface LocationInput {
   truckBereikbaar: boolean;
   geschiktActivatie: boolean;
   geschiktSampling: boolean;
+  geschiktHotspot: boolean;
   geschiktAnder?: string | null;
   stroom: boolean;
   verlichting: boolean;
@@ -133,6 +134,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
           truckBereikbaar: body.truckBereikbaar,
           geschiktActivatie: body.geschiktActivatie,
           geschiktSampling: body.geschiktSampling,
+          geschiktHotspot: body.geschiktHotspot ?? false,
           geschiktAnder: body.geschiktAnder ?? null,
           stroom: body.stroom,
           verlichting: body.verlichting,
@@ -204,6 +206,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         truckBereikbaar: body.truckBereikbaar,
         geschiktActivatie: body.geschiktActivatie,
         geschiktSampling: body.geschiktSampling,
+        geschiktHotspot: body.geschiktHotspot ?? false,
         geschiktAnder: body.geschiktAnder ?? null,
         stroom: body.stroom,
         verlichting: body.verlichting,
@@ -229,14 +232,14 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
   if (!existing) { res.status(404).json({ error: 'Locatie niet gevonden' }); return; }
 
   const force = req.query.force === 'true' || req.query.force === '1';
-  const linked = await prisma.locProjectLocation.findMany({
+  const linked = await prisma.projectLocation.findMany({
     where: { locationId: id },
-    include: { locProject: { select: { id: true, projectNumber: true, name: true } } },
+    include: { project: { select: { id: true, projectNumber: true, name: true } } },
   });
   if (linked.length > 0 && !force) {
     res.status(409).json({
       error: 'Locatie is gekoppeld aan projecten',
-      projects: linked.map((l) => ({ id: l.locProject.id, projectNumber: l.locProject.projectNumber, name: l.locProject.name })),
+      projects: linked.map((l) => ({ id: l.project.id, projectNumber: l.project.projectNumber, name: l.project.name })),
     });
     return;
   }

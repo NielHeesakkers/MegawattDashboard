@@ -159,4 +159,15 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
   res.json({ success: true });
 });
 
+// POST /api/toeleveranciers/:id/refresh-logo — handmatig logo opnieuw zoeken
+router.post('/:id/refresh-logo', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  const t = await prisma.toeleverancier.findUnique({ where: { id } });
+  if (!t) { res.status(404).json({ error: 'Toeleverancier niet gevonden' }); return; }
+  const logo = await autoFetchLogo(SUBDIR, t.name);
+  if (!logo) { res.status(404).json({ error: 'Geen logo gevonden' }); return; }
+  const updated = await prisma.toeleverancier.update({ where: { id }, data: { logo } });
+  res.json({ logo: updated.logo });
+});
+
 export default router;

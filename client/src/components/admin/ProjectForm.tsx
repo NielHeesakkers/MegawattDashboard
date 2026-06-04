@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  Klant, Activation, Supercharger,
+  Klant, Activation, Supercharger, ProjectStatus,
   fetchKlanten, fetchProject, fetchSuperchargers,
   createProject, updateProject,
   createActivation, updateActivation, deleteActivation,
@@ -139,6 +139,8 @@ interface ProjectFormProps {
   projectId?: number;
   onBack?: () => void;
   onCreated?: (id: number) => void;
+  /** Wanneer true: verberg de project-basis-fields en toon alleen de Activaties + Senior-evaluatie sectie. */
+  showOnlyActivations?: boolean;
 }
 
 const inputClass = "w-full px-3 py-2 rounded-[8px] bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.12)] text-white text-[14px]";
@@ -368,11 +370,11 @@ const emptyEvalForm = (): EvalFormData => ({
   superchargerEvals: [],
 });
 
-export default function ProjectForm({ projectId, onBack, onCreated }: ProjectFormProps = {}) {
+export default function ProjectForm({ projectId, onBack, onCreated, showOnlyActivations }: ProjectFormProps = {}) {
   const params = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const id = projectId !== undefined ? String(projectId) : params.id;
+  const id = projectId !== undefined ? String(projectId) : (params.id ?? params.projectId);
   const isEdit = Boolean(id);
 
   const [klanten, setKlanten] = useState<Klant[]>([]);
@@ -385,7 +387,7 @@ export default function ProjectForm({ projectId, onBack, onCreated }: ProjectFor
     endDate: '',
     contactPerson: '',
     email: '',
-    status: 'active' as 'active' | 'completed',
+    status: 'active' as ProjectStatus,
     campaignDescription: '',
     campaignMessages: [] as string[],
     campaignTargetAudience: '',
@@ -410,8 +412,8 @@ export default function ProjectForm({ projectId, onBack, onCreated }: ProjectFor
   const [mapCenter, setMapCenter] = useState<{ lat: number; lon: number } | null>(null);
   const [mapLocked, setMapLocked] = useState(false);
   const [pinLocked, setPinLocked] = useState(false);
-  const locationDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
-  const storeAddressDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const locationDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const storeAddressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [storeAddressSuggestions, setStoreAddressSuggestions] = useState<{ display_name: string }[]>([]);
   const [activeStoreIdx, setActiveStoreIdx] = useState<number | null>(null);
   const [projectOpen, setProjectOpen] = useState(true);
@@ -786,7 +788,7 @@ export default function ProjectForm({ projectId, onBack, onCreated }: ProjectFor
         map.touchZoom.disable();
         map.boxZoom.disable();
         map.keyboard.disable();
-        if (map.zoomControl._map) map.zoomControl.remove();
+        if (map.zoomControl.getContainer()) map.zoomControl.remove();
         // Allow click to place/move pin only when pin is not locked
         if (!pinLocked) {
           map.on('click', handleMapClick);
@@ -800,7 +802,7 @@ export default function ProjectForm({ projectId, onBack, onCreated }: ProjectFor
         map.touchZoom.enable();
         map.boxZoom.enable();
         map.keyboard.enable();
-        if (!map.zoomControl._map) {
+        if (!map.zoomControl.getContainer()) {
           map.zoomControl.addTo(map);
         }
         map.off('click', handleMapClick);
@@ -864,6 +866,7 @@ export default function ProjectForm({ projectId, onBack, onCreated }: ProjectFor
 
   return (
     <div>
+      {!showOnlyActivations && (
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-text-primary">
           {isEdit ? displayName || form.projectNumber : 'Nieuw project'}
@@ -875,8 +878,10 @@ export default function ProjectForm({ projectId, onBack, onCreated }: ProjectFor
           Terug
         </button>
       </div>
+      )}
 
       {/* Project form */}
+      {!showOnlyActivations && (
       <form onSubmit={handleSubmit} className="bg-bg-surface rounded-[12px] border border-[rgba(255,255,255,0.08)] p-6 mb-6">
         <button type="button" onClick={() => setProjectOpen(!projectOpen)} className="flex items-center gap-2 w-full text-left cursor-pointer mb-4">
           <svg width="12" height="12" viewBox="0 0 12 12" className={`text-text-secondary transition-transform ${projectOpen ? 'rotate-90' : ''}`}><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -979,8 +984,23 @@ export default function ProjectForm({ projectId, onBack, onCreated }: ProjectFor
 
         {/* Auto-saved */}
       </form>
+      )}
 
-      {/* Activations (only shown when editing) */}
+      {/* Activations: show als isEdit; lege state krijgt "+ Eerste activatie" knop */}
+      {isEdit && activations.length === 0 && (
+        <div className="bg-bg-surface rounded-[12px] border border-[rgba(255,255,255,0.08)] p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-text-primary">Activaties</h2>
+            <button
+              onClick={handleAddActivation}
+              className="flex items-center gap-1.5 h-7 px-3 rounded-lg ring-1 ring-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] text-[12px] font-medium hover:bg-accent hover:text-[#1a3a38] hover:ring-accent transition-all duration-150 cursor-pointer"
+            >
+              + Eerste activatie aanmaken
+            </button>
+          </div>
+          <p className="text-sm text-white/30 italic mt-3">Nog geen activaties — voeg er één toe om superchargers te kunnen koppelen.</p>
+        </div>
+      )}
       {isEdit && activations.length > 0 && (
         <div className="bg-bg-surface rounded-[12px] border border-[rgba(255,255,255,0.08)] p-6">
           <div className="flex items-center justify-between mb-4">

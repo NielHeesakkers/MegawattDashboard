@@ -31,6 +31,12 @@ export const upload = multer({
   },
 });
 
+// Algemene file uploader (voor projectbestanden) — alle types, ruimere limiet
+export const fileUpload = multer({
+  storage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+});
+
 /** Factory: returns processPhoto middleware that saves into uploads/<subDir>/ */
 export function processPhotoTo(subDir: string) {
   return async function (req: Request, _res: Response, next: NextFunction) {
