@@ -345,6 +345,8 @@ export interface Project {
   locations?: ProjectLocation[];
   toeleveranciers?: Array<{ toeleverancierId: number; telefoon?: string | null; toeleverancier?: { id: number; name: string; logo: string | null } }>;
   _count?: { activations: number; locations: number };
+  locationShareToken?: string | null;
+  locationSharePassword?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -520,6 +522,37 @@ export const createProject = (data: ProjectWriteInput | Partial<Project>) =>
 export const updateProject = (id: number, data: ProjectWriteInput | Partial<Project>) =>
   api.put<Project>(`/projects/${id}`, data).then((r) => r.data);
 export const deleteProject = (id: number) => api.delete(`/projects/${id}`);
+
+// Deelbare locatie-link
+export interface SharedLocation {
+  id: number;
+  naam: string;
+  code: string | null;
+  land: string;
+  stad: string | null;
+  adres: string;
+  lat: number | null;
+  lng: number | null;
+  omgevingType: string;
+  m2: number | null;
+  photos: Array<{ filename: string; isMain: boolean }>;
+}
+export interface SharedLocationsResponse {
+  requiresPassword: boolean;
+  projectName: string;
+  klantName: string;
+  locations?: SharedLocation[];
+}
+
+export const updateProjectShare = (id: number, body: { password?: string | null }) =>
+  api.put<{ shareToken: string | null; password: string | null }>(`/projects/${id}/share`, body).then((r) => r.data);
+
+// Publiek (geen auth, en bewust zonder de 401-interceptor van `api` zodat een fout
+// wachtwoord geen uitlog-redirect triggert).
+export const fetchSharedLocations = (token: string) =>
+  axios.get<SharedLocationsResponse>(`/api/projects/share/locations/${token}`).then((r) => r.data);
+export const verifySharedLocations = (token: string, password: string) =>
+  axios.post<SharedLocationsResponse>(`/api/projects/share/locations/${token}`, { password }).then((r) => r.data);
 
 // Activations (nested under projects)
 export const createActivation = (projectId: number, data: Partial<Activation>) =>

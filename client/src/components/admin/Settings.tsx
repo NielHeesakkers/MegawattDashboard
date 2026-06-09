@@ -11,15 +11,16 @@ import { useToast } from '../ui/Toast';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Modal from '../ui/Modal';
+import { PERMISSION_GROUPS, ALL_PERMISSION_KEYS } from '../../shared/permissions';
 
 const inputClass = 'w-full px-3 py-[10px] rounded-[8px] bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.12)] text-white text-[14px] outline-none focus:border-accent';
 
 type Tab = 'data' | 'email' | 'users' | 'audit';
 
 const tabs: { key: Tab; label: string }[] = [
-  { key: 'data', label: 'Gegevensbeheer' },
-  { key: 'email', label: 'E-mail' },
   { key: 'users', label: 'Gebruikers' },
+  { key: 'email', label: 'E-mail' },
+  { key: 'data', label: 'Gegevensbeheer' },
   { key: 'audit', label: 'Audit Log' },
 ];
 
@@ -426,14 +427,6 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
-const AVAILABLE_TABS = [
-  { key: 'intern', label: 'Intern' },
-  { key: 'planning', label: 'Planning' },
-  { key: 'locatie', label: 'Locatie man' },
-] as const;
-
-const ALL_TAB_KEYS = AVAILABLE_TABS.map(t => t.key);
-
 // ---- Users tab ----
 function UsersTab() {
   const toast = useToast();
@@ -464,7 +457,7 @@ function UsersTab() {
         const data: { email?: string; password?: string; role?: string; allowedTabs?: string[] } = {
           email: editingUser!.email,
           role: editingUser!.role,
-          allowedTabs: editingUser!.role === 'admin' ? [...ALL_TAB_KEYS] : editingUser!.allowedTabs,
+          allowedTabs: editingUser!.role === 'admin' ? [...ALL_PERMISSION_KEYS] : editingUser!.allowedTabs,
         };
         if (editingUser!.password) data.password = editingUser!.password;
         await updateAdminUser(editingUser!.id, data);
@@ -474,7 +467,7 @@ function UsersTab() {
         const created = await createAdminUser({
           email: editingUser!.email,
           role: editingUser!.role,
-          allowedTabs: editingUser!.role === 'admin' ? [...ALL_TAB_KEYS] : editingUser!.allowedTabs,
+          allowedTabs: editingUser!.role === 'admin' ? [...ALL_PERMISSION_KEYS] : editingUser!.allowedTabs,
         });
         const withEmail = created as AdminUser & { emailSent?: boolean };
         if (withEmail.emailSent) toast.success('Gebruiker aangemaakt — welkomstmail verstuurd ✉');
@@ -626,29 +619,36 @@ function UsersTab() {
               </select>
             </div>
             <div>
-              <label className="block text-text-secondary text-sm mb-2">Zichtbare tabs</label>
-              <div className="flex gap-4">
-                {AVAILABLE_TABS.map((tab) => (
-                  <label key={tab.key} className={`flex items-center gap-2 text-sm ${editingUser.role === 'admin' ? 'opacity-50' : ''}`}>
-                    <input
-                      type="checkbox"
-                      checked={editingUser.role === 'admin' || editingUser.allowedTabs.includes(tab.key)}
-                      disabled={editingUser.role === 'admin'}
-                      onChange={(e) => {
-                        if (editingUser.role === 'admin') return;
-                        const newAllowedTabs = e.target.checked
-                          ? [...editingUser.allowedTabs, tab.key]
-                          : editingUser.allowedTabs.filter(t => t !== tab.key);
-                        setEditingUser({ ...editingUser, allowedTabs: newAllowedTabs });
-                      }}
-                      className="accent-accent-teal"
-                    />
-                    <span className="text-text-primary">{tab.label}</span>
-                  </label>
+              <label className="block text-text-secondary text-sm mb-2">Zichtbaar</label>
+              <div className="space-y-3">
+                {PERMISSION_GROUPS.map((group) => (
+                  <div key={group.group}>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1">{group.group}</p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                      {group.items.map((item) => (
+                        <label key={item.key} className={`flex items-center gap-2 text-sm ${editingUser.role === 'admin' ? 'opacity-50' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={editingUser.role === 'admin' || editingUser.allowedTabs.includes(item.key)}
+                            disabled={editingUser.role === 'admin'}
+                            onChange={(e) => {
+                              if (editingUser.role === 'admin') return;
+                              const newAllowedTabs = e.target.checked
+                                ? [...editingUser.allowedTabs, item.key]
+                                : editingUser.allowedTabs.filter((t) => t !== item.key);
+                              setEditingUser({ ...editingUser, allowedTabs: newAllowedTabs });
+                            }}
+                            className="accent-accent-teal"
+                          />
+                          <span className="text-text-primary">{item.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
               {editingUser.role === 'admin' && (
-                <p className="text-text-muted text-xs mt-1">Admins hebben automatisch toegang tot alle tabs</p>
+                <p className="text-text-muted text-xs mt-2">Admins hebben automatisch toegang tot alles</p>
               )}
             </div>
             <div className="flex justify-end gap-3 pt-2">
@@ -743,7 +743,7 @@ function AuditTab() {
 export default function Settings() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
-  const [activeTab, setActiveTab] = useState<Tab>('data');
+  const [activeTab, setActiveTab] = useState<Tab>(isAdmin ? 'users' : 'email');
 
   // Gebruikers-tab alleen voor admins
   const visibleTabs = tabs.filter(t => t.key !== 'users' || isAdmin);

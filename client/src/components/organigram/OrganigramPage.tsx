@@ -17,6 +17,7 @@ import KlantenManager from '../admin/KlantenManager';
 import ToeleveranciersManager from '../admin/ToeleveranciersManager';
 import ContactenManager from '../admin/ContactenManager';
 import Sidebar from './Sidebar';
+import { ALL_PERMISSION_KEYS } from '../../shared/permissions';
 import { fetchToeleveranciers, createToeleverancier, updateToeleverancier, deleteToeleverancier, refreshToeleverancierLogo, Toeleverancier } from '../../api';
 import ProjectList from '../admin/ProjectList';
 import ProjectForm from '../admin/ProjectForm';
@@ -145,21 +146,10 @@ export default function OrganigramPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    const isInternView = viewMode === 'dashboard' || viewMode === 'klantteams';
-    const isPlanView = viewMode.startsWith('projecten-') || viewMode === 'klanten' || viewMode === 'toeleveranciers' || viewMode === 'superchargers';
-    const isLocatieView = viewMode === 'locaties';
-    const fallback = (): ViewMode | null => {
-      if (hasTab('intern')) return 'dashboard';
-      if (hasTab('planning')) return 'klanten';
-      if (hasTab('locatie')) return 'locaties';
-      return null;
-    };
-    if (isInternView && !hasTab('intern')) {
-      const f = fallback(); if (f) handleViewMode(f);
-    } else if (isPlanView && !hasTab('planning')) {
-      const f = fallback(); if (f) handleViewMode(f);
-    } else if (isLocatieView && !hasTab('locatie')) {
-      const f = fallback(); if (f) handleViewMode(f);
+    // De viewMode is tevens de permissie-key. Geen toegang → naar de eerste toegestane view.
+    if (!hasTab(viewMode)) {
+      const fallback = ALL_PERMISSION_KEYS.find((k) => k !== 'nieuw-project' && hasTab(k)) as ViewMode | undefined;
+      if (fallback && fallback !== viewMode) handleViewMode(fallback);
     }
   }, [isAuthenticated, allowedTabs, viewMode]);
   const [teams, setTeams] = useState<Team[]>([]);

@@ -18,6 +18,7 @@ import ToeleveranciersManager from './components/admin/ToeleveranciersManager';
 import ProjectList from './components/admin/ProjectList';
 import ProjectForm from './components/admin/ProjectForm';
 import BriefingPage from './components/BriefingPage';
+import SharedLocationsPage from './components/SharedLocationsPage';
 import ResetPasswordPage from './components/ui/ResetPasswordPage';
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
       <Routes>
         {/* Public briefing page (no auth) */}
         <Route path="/briefing/:token" element={<BriefingPage />} />
+        <Route path="/locaties/deel/:token" element={<SharedLocationsPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
         {/* Public dashboard — dezelfde OrganigramPage bedient elke sectie, route bepaalt de view */}

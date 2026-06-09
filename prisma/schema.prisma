@@ -219,6 +219,9 @@ model Project {
   needsLocations         Boolean      @default(false)
   needsSuperchargers     Boolean      @default(false)
   notities               String       @default("")
+  // Deelbare locatie-link voor klant (alleen-lezen locatie-overzicht)
+  locationShareToken     String?      @unique
+  locationSharePassword  String?
   // Campagne-brede briefing velden
   campaignDescription    String?
   campaignMessage        String?

@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Project, ProjectLocation, ProjectWriteInput, ProjectStatus,
   Klant, Location, AvailabilityState, Toeleverancier, Specialisme, Supercharger,
-  fetchProject, createProject, updateProject, deleteProject,
-  fetchKlanten, fetchKlant, fetchLocations, fetchLocation, fetchToeleveranciers, fetchSpecialismes, fetchSuperchargers,
+  fetchProject, createProject, updateProject, updateProjectShare, deleteProject,
+  fetchKlanten, fetchLocations, fetchLocation, fetchToeleveranciers, fetchSpecialismes, fetchSuperchargers,
 } from '../../api';
 import { formatPhone } from '../../shared/phone';
 import { useToast } from '../ui/Toast';
@@ -44,6 +44,8 @@ interface TabData {
 
 // Layout-stijl gelijk aan Planning → Projecten (donkere cards + donkere inputs)
 const inputClass = 'w-full px-3 py-2 rounded-[8px] bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.12)] text-white text-[14px] placeholder-[rgba(255,255,255,0.3)] focus:outline-none focus:border-accent-teal';
+// Zelfde stijl maar zónder w-full, voor flex-rijen (deel-link) waar breedtes via flex bepaald worden.
+const inputClassFlex = 'px-3 py-2 rounded-[8px] bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.12)] text-white text-[14px] placeholder-[rgba(255,255,255,0.3)] focus:outline-none focus:border-accent-teal';
 const areaClass = 'w-full px-3 py-2 rounded-[8px] bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.12)] text-white text-[14px] placeholder-[rgba(255,255,255,0.3)] focus:outline-none focus:border-accent-teal';
 const cardClass = 'bg-bg-surface rounded-[12px] border border-[rgba(255,255,255,0.08)] p-6';
 const labelClass = 'block text-text-secondary text-sm mb-1';
@@ -147,14 +149,16 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
   const [projectNumber, setProjectNumber] = useState('');
   const [name, setName] = useState('');
   const [status, setStatus] = useState<ProjectStatus>('active');
-  const [contacts, setContacts] = useState<Array<{ mode: 'pulldown' | 'manual'; naam: string; email: string; telefoon: string }>>([{ mode: 'pulldown', naam: '', email: '', telefoon: '' }]);
   const [notities, setNotities] = useState('');
   const [tabs, setTabs] = useState<TabData[]>([]);
   const [activeTabIdx, setActiveTabIdx] = useState<number>(0);
-  const [klantContacts, setKlantContacts] = useState<Array<{ naam: string; email: string | null; telefoon: string | null }>>([]);
   const [projectOpen, setProjectOpen] = useState(true);
   const [locOpen, setLocOpen] = useState(true);
   const [notesOpen, setNotesOpen] = useState(true);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [sharePasswordInput, setSharePasswordInput] = useState('');
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const dragFromRef = useRef<number | null>(null);
 
   // Initial load: klanten, locations, project (if editing)
@@ -176,62 +180,48 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
           setStatus(p.status);
           setSelectedToeleverancierIds((p.toeleveranciers ?? []).map((t) => t.toeleverancierId));
           setToeleverancierPhones((p.toeleveranciers ?? []).map((t) => t.telefoon ?? ''));
-          const rows = (p.contacts ?? []).map((c): { mode: 'pulldown' | 'manual'; naam: string; email: string; telefoon: string } => ({
-            mode: 'pulldown',
-            naam: c.naam,
-            email: c.email ?? '',
-            telefoon: c.telefoon ?? '',
-          }));
-          // Legacy fallback: Project model heeft alleen contactPerson + email (geen telefoon).
-          if (rows.length === 0 && (p.contactPerson || p.email)) {
-            rows.push({ mode: 'pulldown', naam: p.contactPerson ?? '', email: p.email ?? '', telefoon: '' });
-          }
-          setContacts(rows.length ? rows : [{ mode: 'pulldown', naam: '', email: '', telefoon: '' }]);
           setNotities(p.notities ?? '');
           setTabs((p.locations ?? []).map(fromProjectLocation));
+          setShareToken(p.locationShareToken ?? null);
+          setSharePasswordInput(p.locationSharePassword ?? '');
           setActiveTabIdx(0);
         } finally { setLoading(false); }
       }
     })();
   }, [projectId]);
 
-  // Laad klant-contacts als klantId wijzigt zodat pulldowns actueel zijn.
-  // Eerste contact-rij krijgt automatisch de eerste klant-contact (als die rij nog leeg is).
-  useEffect(() => {
-    if (!klantId) { setKlantContacts([]); return; }
-    fetchKlant(klantId).then((k) => {
-      const primary = (k.contacts && k.contacts.length > 0)
-        ? k.contacts.map((c) => ({ naam: c.naam, email: c.email, telefoon: c.telefoon }))
-        : [];
-      if (primary.length === 0 && (k.contactPerson || k.email)) {
-        primary.push({ naam: k.contactPerson ?? '', email: k.email, telefoon: null });
-      }
-      setKlantContacts(primary);
-      // Auto-fill alleen bij nieuwe projecten — anders maakt dit form dirty direct na load
-      // wanneer het bestaande project een lege primary contact-rij had.
-      if (projectId === 'new' && primary.length > 0) {
-        setContacts((prev) => {
-          const first = prev[0];
-          if (first && (first.naam || first.email || first.telefoon)) return prev;
-          const copy = [...prev];
-          copy[0] = { mode: 'pulldown', naam: primary[0].naam, email: primary[0].email ?? '', telefoon: primary[0].telefoon ?? '' };
-          return copy;
-        });
-      }
-    }).catch(() => setKlantContacts([]));
-  }, [klantId]);
+  // ── Deelbare locatie-link ──────────────────────────────────────────────────
+  const projId = typeof projectId === 'number' ? projectId : null;
+  const shareUrl = shareToken ? `${window.location.origin}/locaties/deel/${shareToken}` : '';
 
-  const filledContacts = useMemo(
-    () => contacts.filter((c) => c.naam.trim() || c.email.trim() || c.telefoon.trim()),
-    [contacts],
-  );
+  const applyShare = async (body: { password?: string | null }) => {
+    if (projId == null) return;
+    setShareBusy(true);
+    try {
+      const r = await updateProjectShare(projId, body);
+      setShareToken(r.shareToken);
+      setSharePasswordInput(r.password ?? '');
+    } catch {
+      toast.error('Kon deel-instelling niet opslaan');
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const copyShareLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 1500);
+    } catch { /* clipboard niet beschikbaar */ }
+  };
 
   const baseDirty = useMemo(() => {
     if (projectId === 'new') {
-      return !!(klantId || projectNumber || name || filledContacts.length > 0 || notities || tabs.length > 0 || selectedToeleverancierIds.length > 0);
+      return !!(klantId || projectNumber || name || notities || tabs.length > 0 || selectedToeleverancierIds.length > 0);
     }
     if (!project) return false;
-    const origContacts = (project.contacts ?? []).map((c) => ({ naam: c.naam, email: c.email ?? '', telefoon: c.telefoon ?? '' }));
     const origToelIds = [...((project.toeleveranciers ?? []).map((t) => t.toeleverancierId))].sort((a, b) => a - b);
     const curToelIds = selectedToeleverancierIds.filter((id): id is number => id !== null).sort((a, b) => a - b);
     const origToelPhones = (project.toeleveranciers ?? []).map((t) => t.telefoon ?? '').join(',');
@@ -242,7 +232,6 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
       (project.name ?? '') !== name ||
       project.status !== status ||
       (project.notities ?? '') !== notities ||
-      JSON.stringify(origContacts) !== JSON.stringify(filledContacts) ||
       JSON.stringify(origToelIds) !== JSON.stringify(curToelIds) ||
       origToelPhones !== curToelPhones ||
       JSON.stringify((project.locations ?? []).map((l) => ({
@@ -255,7 +244,7 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
         superchargers: t.superchargers.map((s) => ({ id: s.superchargerId, av: stableAvailabilityJson(s.availability) })),
       })))
     );
-  }, [project, projectId, klantId, projectNumber, name, status, filledContacts, notities, tabs, selectedToeleverancierIds]);
+  }, [project, projectId, klantId, projectNumber, name, status, notities, tabs, selectedToeleverancierIds]);
 
   // (auto-save vervangt de unsaved-changes prompt)
   void baseDirty;
@@ -333,11 +322,6 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
       projectNumber: projectNumber.trim(),
       name: name.trim() || null,
       status,
-      contacts: filledContacts.map((c) => ({
-        naam: c.naam.trim(),
-        email: c.email.trim() || null,
-        telefoon: c.telefoon.trim() || null,
-      })),
       notities,
       locations: tabs.filter((t) => t.locationId !== null).map((t) => ({
         locationId: t.locationId!,
@@ -383,7 +367,7 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
 
   // Auto-save bij elke wijziging — alleen als minimum vereist gevuld is
   const saveStatus = useAutoSave(
-    { klantId, projectNumber, name, status, filledContacts, notities, tabsForSave, selectedToeleverancierIds, toeleverancierPhones },
+    { klantId, projectNumber, name, status, notities, tabsForSave, selectedToeleverancierIds, toeleverancierPhones },
     save,
     { enabled: !!klantId && !!projectNumber.trim() }
   );
@@ -433,9 +417,9 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
                 : 'bg-red-500/15 text-red-300 ring-red-500/30'
             }`}
           >
-            <option value="active">Actief</option>
-            <option value="completed">Afgerond</option>
-            <option value="cancelled">Geannuleerd</option>
+            <option value="active">Lopend</option>
+            <option value="completed">Gearchiveerd</option>
+            <option value="cancelled">Afgewezen</option>
           </select>
         </div>
         <div style={{ display: projectOpen ? 'block' : 'none' }}>
@@ -456,133 +440,6 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
               <label className={labelClass}>Projectnaam</label>
               <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="Naam van het project" />
             </div>
-          </div>
-
-          {/* Contact — elke contactpersoon is één rij: [naam-pulldown/invoer | email | telefoon] */}
-          <h3 className={subHeadingClass}>Contact</h3>
-          <div className="space-y-3">
-            {contacts.map((c, i) => {
-              const usedNames = contacts.filter((_, j) => j !== i).map((x) => x.naam).filter(Boolean);
-              const availableKlantContacts = klantContacts.filter((kc) => !usedNames.includes(kc.naam));
-              const isPrimary = i === 0;
-              // Als er geen klant-contacten meer beschikbaar zijn, dwing handmatig
-              const effectiveMode = availableKlantContacts.length === 0 ? 'manual' : c.mode;
-              return (
-                <div key={i}>
-                  <div className="grid grid-cols-1 md:grid-cols-[25ch_50ch_12ch_auto] gap-2 items-stretch">
-                    {effectiveMode === 'pulldown' ? (
-                      <select
-                        className={inputClass}
-                        value={availableKlantContacts.some((kc) => kc.naam === c.naam) ? c.naam : ''}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          if (v === '__manual__') {
-                            setContacts(contacts.map((x, j) => j === i ? { mode: 'manual', naam: '', email: '', telefoon: '' } : x));
-                          } else {
-                            const chosen = klantContacts.find((kc) => kc.naam === v);
-                            if (chosen) {
-                              setContacts(contacts.map((x, j) => j === i ? { mode: 'pulldown', naam: chosen.naam, email: chosen.email ?? '', telefoon: chosen.telefoon ?? '' } : x));
-                            }
-                          }
-                        }}
-                      >
-                        {!availableKlantContacts.some((kc) => kc.naam === c.naam) && (
-                          <option value="" disabled>— Kies contact —</option>
-                        )}
-                        {availableKlantContacts.map((kc) => <option key={kc.naam} value={kc.naam}>{kc.naam}</option>)}
-                        <option value="__manual__">— Handmatig invoeren —</option>
-                      </select>
-                    ) : (
-                      <div className="relative">
-                        <input
-                          className={`${inputClass} pr-9`}
-                          placeholder="Naam"
-                          value={c.naam}
-                          onChange={(e) => setContacts(contacts.map((x, j) => j === i ? { ...x, naam: e.target.value } : x))}
-                        />
-                        {availableKlantContacts.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setContacts(contacts.map((x, j) => j === i ? { mode: 'pulldown', naam: '', email: '', telefoon: '' } : x))}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-white text-xs px-1 cursor-pointer"
-                            title="Kies uit klant-contactpersonen"
-                          >
-                            ▾
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {c.email ? (
-                      <div className="relative">
-                        <a
-                          href={`mailto:${c.email}`}
-                          className={`${inputClass} flex items-center truncate pr-8 hover:border-accent-teal hover:text-accent-teal transition-colors`}
-                          title={c.email}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {c.email}
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => setContacts(contacts.map((x, j) => j === i ? { ...x, email: '' } : x))}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-white text-xs px-1 cursor-pointer"
-                          title="Email wissen / bewerken"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ) : (
-                      <input
-                        className={inputClass}
-                        type="email"
-                        placeholder="Email"
-                        value={c.email}
-                        onChange={(e) => setContacts(contacts.map((x, j) => j === i ? { ...x, email: e.target.value } : x))}
-                      />
-                    )}
-                    <input
-                      className={inputClass}
-                      type="tel"
-                      placeholder="Telefoon"
-                      value={c.telefoon}
-                      onChange={(e) => setContacts(contacts.map((x, j) => j === i ? { ...x, telefoon: e.target.value } : x))}
-                      onBlur={(e) => { const f = formatPhone(e.target.value); if (f !== e.target.value) setContacts(contacts.map((x, j) => j === i ? { ...x, telefoon: f } : x)); }}
-                    />
-                    {!isPrimary ? (
-                      <div className="flex items-center md:pr-3">
-                        <button
-                          type="button"
-                          onClick={() => setContacts(contacts.filter((_, j) => j !== i))}
-                          title="Verwijder contactpersoon"
-                          className="w-10 h-full rounded-[8px] bg-green-900/60 hover:bg-red-500/80 text-green-200 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9M18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397M4.772 5.79c.34-.059.68-.114 1.022-.165M18.16 5.79c-.34-.059-.68-.114-1.022-.165M15.14 5.625v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                          </svg>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="w-10 hidden md:block md:pr-3" />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => {
-                const usedNames = contacts.map((c) => c.naam).filter(Boolean);
-                const nextAvailable = klantContacts.find((kc) => !usedNames.includes(kc.naam));
-                if (nextAvailable) {
-                  setContacts([...contacts, { mode: 'pulldown', naam: nextAvailable.naam, email: nextAvailable.email ?? '', telefoon: nextAvailable.telefoon ?? '' }]);
-                } else {
-                  setContacts([...contacts, { mode: 'manual', naam: '', email: '', telefoon: '' }]);
-                }
-              }}
-              className="px-3 py-1.5 rounded-[6px] bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.12)] text-text-secondary hover:text-white text-sm cursor-pointer"
-            >
-              + Contactpersoon toevoegen
-            </button>
           </div>
 
           {/* Toeleveranciers — rij-gebaseerd, zelfde structuur als Contact. Pulldown groepeert per specialisme. */}
@@ -704,6 +561,49 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
                 className="px-3 py-1.5 rounded-[6px] bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.12)] text-text-secondary hover:text-white text-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 + Toeleverancier toevoegen
+              </button>
+            </div>
+          )}
+
+          {/* Deelbare locatie-link voor de klant (alleen-lezen overzicht) */}
+          <h3 className={subHeadingClass}>Deelbare locatie-link</h3>
+          {projId == null ? (
+            <p className="text-sm text-white/30 italic">De deel-link verschijnt zodra het project is opgeslagen (kies klant + projectnr.).</p>
+          ) : !shareToken ? (
+            <p className="text-sm text-white/30 italic">De deel-link wordt aangemaakt…</p>
+          ) : (
+            <div className="flex items-center gap-2 rounded-[10px] border border-[rgba(45,212,191,0.25)] bg-[rgba(45,212,191,0.06)] p-3">
+              <input
+                readOnly
+                value={shareUrl}
+                onFocus={(e) => e.target.select()}
+                className={`${inputClassFlex} flex-1 min-w-0 font-mono text-[12px]`}
+              />
+              <input
+                type="text"
+                name="megawatt-share-pw"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore
+                value={sharePasswordInput}
+                onChange={(e) => setSharePasswordInput(e.target.value)}
+                placeholder="Optioneel wachtwoord"
+                className={`${inputClassFlex} w-[220px] shrink-0`}
+              />
+              <button
+                type="button"
+                disabled={shareBusy}
+                onClick={() => applyShare({ password: sharePasswordInput.trim() || null })}
+                className="shrink-0 px-3 py-2 rounded-[8px] bg-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.15)] text-white text-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Bewaar
+              </button>
+              <button
+                type="button"
+                onClick={copyShareLink}
+                className="shrink-0 px-3 py-2 rounded-[8px] bg-accent-teal text-[#1a3a38] text-sm font-semibold hover:opacity-85 cursor-pointer"
+              >
+                {shareCopied ? 'Gekopieerd ✓' : 'Kopieer'}
               </button>
             </div>
           )}

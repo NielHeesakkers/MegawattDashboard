@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { globalSearch, GlobalSearchResults } from '../../api';
+import { PERMISSION_GROUPS } from '../../shared/permissions';
 
 type ViewMode = 'dashboard' | 'klantteams' | 'klanten' | 'toeleveranciers' | 'projecten-actief' | 'projecten-afgerond' | 'projecten-geannuleerd' | 'locaties' | 'superchargers';
 
@@ -16,28 +17,6 @@ interface Props {
   onLogout: () => void;
 }
 
-interface MenuItem { label: string; mode: ViewMode }
-interface MenuSection { label: string; tab: string; items: MenuItem[] }
-
-const SECTIONS: MenuSection[] = [
-  { label: 'Contacten', tab: 'planning', items: [
-    { label: 'Klanten',         mode: 'klanten' },
-    { label: 'Toeleveranciers', mode: 'toeleveranciers' },
-  ]},
-  { label: 'Projecten', tab: 'planning', items: [
-    { label: 'Actief',       mode: 'projecten-actief' },
-    { label: 'Afgerond',     mode: 'projecten-afgerond' },
-    { label: 'Geannuleerd',  mode: 'projecten-geannuleerd' },
-  ]},
-  { label: 'Resources', tab: 'locatie', items: [
-    { label: 'Locaties',      mode: 'locaties' },
-    { label: 'Superchargers', mode: 'superchargers' },
-  ]},
-  { label: 'Intern', tab: 'intern', items: [
-    { label: 'Organigram', mode: 'dashboard' },
-    { label: 'Klantteams', mode: 'klantteams' },
-  ]},
-];
 
 const MegawattLogo = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28.35 5.67" className="h-6 w-auto">
@@ -154,11 +133,14 @@ export default function Sidebar({ viewMode, onViewMode, hasTab, isAdmin, usernam
   // Sluit mobiele sidebar bij viewMode wijziging
   useEffect(() => { setSidebarOpen(false); }, [viewMode]);
 
+  const { pathname } = useLocation();
+  const isNewProject = pathname === '/projecten/new';
+
   const itemClass = (active: boolean) =>
     `block w-full text-left px-3 py-2 rounded-[6px] text-[14px] transition-all duration-150 cursor-pointer ${
       active
         ? 'bg-accent-teal text-[#1a3a38] font-medium'
-        : 'text-[rgba(255,255,255,0.7)] hover:text-[rgba(255,255,255,0.9)]'
+        : 'text-[rgba(255,255,255,0.7)] hover:bg-accent-teal/30 hover:text-white'
     }`;
 
   const sidebarContent = (
@@ -175,20 +157,38 @@ export default function Sidebar({ viewMode, onViewMode, hasTab, isAdmin, usernam
 
       {/* Menu sections */}
       <nav className="flex-1 flex flex-col gap-[2px] overflow-y-auto">
-        {SECTIONS.filter(s => hasTab(s.tab)).map((section, idx) => (
-          <div key={section.label}>
+        {PERMISSION_GROUPS.filter((g) => g.items.some((it) => hasTab(it.key))).map((group, idx) => (
+          <div key={group.group}>
             {idx > 0 && <div className="border-t border-[rgba(255,255,255,0.06)] my-2" />}
             <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[rgba(255,255,255,0.4)]">
-              {section.label}
+              {group.group}
             </div>
-            {section.items.map((item) => (
-              <button
-                key={item.mode}
-                onClick={() => onViewMode(item.mode)}
-                className={`${itemClass(viewMode === item.mode)} pl-5`}
-              >
-                {item.label}
-              </button>
+            {group.items.filter((it) => hasTab(it.key)).map((item) => (
+              item.key === 'nieuw-project' ? (
+                <Link
+                  key={item.key}
+                  to="/projecten/new"
+                  onClick={() => setSidebarOpen(false)}
+                  className={`w-full flex items-center gap-2 mb-1 px-3 py-2 rounded-[6px] text-[14px] font-semibold transition-all duration-150 ${
+                    isNewProject
+                      ? 'bg-[#ffff00] text-[#1a3a38]'
+                      : 'bg-[#ffff00]/10 text-[#ffff00] hover:bg-[#ffff00] hover:text-[#1a3a38]'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  {item.label}
+                </Link>
+              ) : (
+                <button
+                  key={item.key}
+                  onClick={() => onViewMode(item.key as ViewMode)}
+                  className={`${itemClass(viewMode === item.key && !isNewProject)} pl-5`}
+                >
+                  {item.label}
+                </button>
+              )
             ))}
           </div>
         ))}

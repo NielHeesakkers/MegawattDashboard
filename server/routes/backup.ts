@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
+import { selectBackupsToKeep, parseBackupDate } from '../lib/backupRetention';
 import archiver from 'archiver';
 import multer from 'multer';
 import extractZip from 'extract-zip';
@@ -429,6 +430,19 @@ router.delete('/clear', authMiddleware, async (req: AuthRequest, res: Response) 
 
 // ---- Auto backup ----
 
+// Pas de retentie toe: laatste 30 dagen + 12 weken (zondag) + 12 maanden (laatste dag).
+// Onparsebare bestanden worden met rust gelaten.
+function pruneBackups(): void {
+  const files = fs.readdirSync(backupDir)
+    .filter((f) => f.startsWith('megawatt-backup-') && f.endsWith('.zip'));
+  const keep = selectBackupsToKeep(files);
+  for (const f of files) {
+    if (parseBackupDate(f) && !keep.has(f)) {
+      try { fs.unlinkSync(path.join(backupDir, f)); } catch { /* negeer */ }
+    }
+  }
+}
+
 async function createAutoBackup(): Promise<string | null> {
   try {
     const [executives, teams, members, clientTeams, clientTeamMembers, clients, users, klanten, projects, activations, locations, locationContacts, locationPhotos, locationCosts] = await Promise.all([
@@ -488,14 +502,7 @@ async function createAutoBackup(): Promise<string | null> {
       archive.finalize();
     });
 
-    // Keep max 30 backups, delete oldest
-    const files = fs.readdirSync(backupDir)
-      .filter((f) => f.startsWith('megawatt-backup-') && f.endsWith('.zip'))
-      .sort()
-      .reverse();
-    for (const old of files.slice(30)) {
-      fs.unlinkSync(path.join(backupDir, old));
-    }
+    pruneBackups();
 
     console.log(`[Auto Backup] Created: ${filename}`);
     return filename;

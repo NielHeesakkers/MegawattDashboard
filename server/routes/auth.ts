@@ -10,7 +10,27 @@ import { logAudit } from '../lib/audit';
 const router = Router();
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'megawatt-dashboard-secret-2026';
-const AVAILABLE_TABS = ['intern', 'planning', 'locatie'];
+const AVAILABLE_TABS = [
+  'klanten', 'toeleveranciers',
+  'nieuw-project', 'projecten-actief', 'projecten-afgerond', 'projecten-geannuleerd',
+  'locaties', 'superchargers',
+  'dashboard', 'klantteams',
+];
+
+// Migratie: oude grove tab-keys → fijnmazige item-keys (backward compat voor bestaande accounts).
+const LEGACY_TAB_MAP: Record<string, string[]> = {
+  planning: ['klanten', 'toeleveranciers', 'nieuw-project', 'projecten-actief', 'projecten-afgerond', 'projecten-geannuleerd'],
+  locatie: ['locaties', 'superchargers'],
+  intern: ['dashboard', 'klantteams'],
+};
+function normalizeTabs(tabs: string[]): string[] {
+  const out = new Set<string>();
+  for (const t of tabs) {
+    if (LEGACY_TAB_MAP[t]) LEGACY_TAB_MAP[t].forEach((k) => out.add(k));
+    else if (AVAILABLE_TABS.includes(t)) out.add(t);
+  }
+  return [...out];
+}
 
 // Login rate limiting — max 5 attempts per 15 minutes per IP
 const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
@@ -93,9 +113,9 @@ router.post('/login', async (req: Request, res: Response) => {
     { expiresIn: '24h' }
   );
 
-  const allowedTabs = (user.role === 'admin' || user.role === 'superuser')
+  const allowedTabs = user.role === 'admin'
     ? AVAILABLE_TABS
-    : JSON.parse(user.allowedTabs) as string[];
+    : normalizeTabs(JSON.parse(user.allowedTabs) as string[]);
 
   res.json({ token, username: user.username, role: user.role, allowedTabs });
 });
@@ -288,7 +308,7 @@ router.get('/users', authMiddleware, adminOnly, async (_req: AuthRequest, res: R
   });
   res.json(users.map(u => ({
     ...u,
-    allowedTabs: JSON.parse(u.allowedTabs) as string[],
+    allowedTabs: u.role === 'admin' ? AVAILABLE_TABS : normalizeTabs(JSON.parse(u.allowedTabs) as string[]),
   })));
 });
 
@@ -318,9 +338,9 @@ router.post('/users', authMiddleware, adminOnly, async (req: AuthRequest, res: R
     ? await bcrypt.hash(password, 10)
     : await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10); // wegwerp-hash
 
-  const resolvedTabs = (validRole === 'admin' || validRole === 'superuser')
+  const resolvedTabs = validRole === 'admin'
     ? JSON.stringify(AVAILABLE_TABS)
-    : JSON.stringify(Array.isArray(allowedTabs) ? allowedTabs : []);
+    : JSON.stringify(normalizeTabs(Array.isArray(allowedTabs) ? allowedTabs : []));
 
   const user = await prisma.user.create({
     data: { username: normalizedEmail, email: normalizedEmail, passwordHash, role: validRole, allowedTabs: resolvedTabs },
@@ -378,13 +398,13 @@ router.put('/users/:id', authMiddleware, adminOnly, async (req: AuthRequest, res
   if (password) data.passwordHash = await bcrypt.hash(password, 10);
   if (['admin', 'superuser', 'user'].includes(role)) {
     data.role = role;
-    if (role === 'admin' || role === 'superuser') {
+    if (role === 'admin') {
       data.allowedTabs = JSON.stringify(AVAILABLE_TABS);
     }
   }
   const effectiveRole = data.role || existing.role;
-  if (allowedTabs !== undefined && effectiveRole !== 'admin' && effectiveRole !== 'superuser') {
-    data.allowedTabs = JSON.stringify(Array.isArray(allowedTabs) ? allowedTabs : []);
+  if (allowedTabs !== undefined && effectiveRole !== 'admin') {
+    data.allowedTabs = JSON.stringify(normalizeTabs(Array.isArray(allowedTabs) ? allowedTabs : []));
   }
 
   const user = await prisma.user.update({

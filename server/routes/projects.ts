@@ -60,6 +60,39 @@ function generateBriefingToken(): string {
   return crypto.randomBytes(16).toString('hex');
 }
 
+function slugifyPart(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+// Leesbare, stabiele deel-token: projectnr_klant_projectnaam (projectnr is uniek → token uniek).
+function projectShareSlug(projectNumber: string, klantName: string, name: string | null): string {
+  return [projectNumber, klantName, name || 'project'].map(slugifyPart).filter(Boolean).join('_');
+}
+
+// Alleen-lezen locatie-overzicht voor de publieke deel-pagina (geen interne velden).
+async function buildSharedLocations(projectId: number) {
+  const rows = await prisma.projectLocation.findMany({
+    where: { projectId },
+    orderBy: { order: 'asc' },
+    include: { location: { include: { photos: { orderBy: { order: 'asc' } } } } },
+  });
+  return rows.map((r) => ({
+    id: r.location.id,
+    naam: r.location.naam,
+    code: r.location.code,
+    land: r.location.land,
+    stad: r.location.stad,
+    adres: r.location.adres,
+    lat: r.location.lat,
+    lng: r.location.lng,
+    omgevingType: r.location.omgevingType,
+    m2: r.location.m2,
+    photos: r.location.photos.map((ph) => ({ filename: ph.filename, isMain: ph.isMain })),
+  }));
+}
+
 function sanitize(s: string): string {
   return s.replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, ' ').trim();
 }
@@ -215,6 +248,14 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     include: PROJECT_INCLUDE,
   });
   if (!project) { res.status(404).json({ error: 'Project niet gevonden' }); return; }
+  // Backfill leesbare deel-token voor bestaande projecten zonder token.
+  if (!project.locationShareToken) {
+    const slug = projectShareSlug(project.projectNumber, project.klant.name, project.name);
+    try {
+      await prisma.project.update({ where: { id: project.id }, data: { locationShareToken: slug } });
+      project.locationShareToken = slug;
+    } catch { /* zeldzame slug-botsing — laat token null */ }
+  }
   res.json(project);
 });
 
@@ -227,6 +268,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     contacts, locations, toeleverancierIds,
   } = req.body;
   const tRows = sanitizeToeleverancierRows(toeleverancierIds);
+  const klantForSlug = await prisma.klant.findUnique({ where: { id: klantId }, select: { name: true } });
   try {
     const result = await prisma.$transaction(async (tx) => {
       const project = await tx.project.create({
@@ -242,6 +284,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
           notities: notities ?? '',
           campaignDescription, campaignMessage, campaignTargetAudience, campaignTarget,
           clothing, settingInstructions, extraInfo,
+          locationShareToken: projectShareSlug(projectNumber, klantForSlug?.name ?? '', name || null),
           contacts:  { create: sanitizeContacts(contacts) },
           locations: { create: sanitizeLocations(locations).map(locationToPrismaCreate) },
           toeleveranciers: { create: tRows.map((r) => ({ toeleverancierId: r.id, telefoon: r.telefoon })) },
@@ -337,6 +380,36 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     if (prismaErr.code === 'P2002') { res.status(400).json({ error: 'Er bestaat al een project met dit projectnummer' }); return; }
     throw err;
   }
+});
+
+// Stel het optionele wachtwoord van de deel-link in of wis het. De link (token) zelf
+// is een vaste, leesbare slug die bij het project hoort — die wordt hier niet gewijzigd.
+router.put('/:id/share', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  const { password } = req.body as { password?: string | null };
+
+  const project = await prisma.project.findUnique({
+    where: { id },
+    select: { id: true, locationShareToken: true },
+  });
+  if (!project) { res.status(404).json({ error: 'Project niet gevonden' }); return; }
+
+  // Wachtwoord wordt als platte tekst bewaard (zichtbaar voor ingelogde admins; de site
+  // zit volledig achter login). password: niet-lege string => zetten, '' of null => wissen.
+  const data: { locationSharePassword?: string | null } = {};
+  if (password === null || password === '') {
+    data.locationSharePassword = null;
+  } else if (typeof password === 'string') {
+    data.locationSharePassword = password;
+  }
+
+  const updated = await prisma.project.update({
+    where: { id },
+    data,
+    select: { locationShareToken: true, locationSharePassword: true },
+  });
+  await logAudit('UPDATE', 'Project', id, { share: 'wachtwoord bijgewerkt' }, req.adminUsername!);
+  res.json({ shareToken: updated.locationShareToken, password: updated.locationSharePassword });
 });
 
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -525,6 +598,42 @@ router.get('/briefing/:token', async (req: Request, res: Response) => {
     return;
   }
   res.json(activation);
+});
+
+// ── Publieke deelbare locatie-link (geen auth) ───────────────────────────────
+// GET: haalt overzicht op; als er een wachtwoord is, alleen metadata + requiresPassword.
+router.get('/share/locations/:token', async (req: Request, res: Response) => {
+  const project = await prisma.project.findUnique({
+    where: { locationShareToken: String(req.params.token) },
+    select: { id: true, name: true, projectNumber: true, locationSharePassword: true, klant: { select: { name: true } } },
+  });
+  if (!project) { res.status(404).json({ error: 'Deel-link niet gevonden' }); return; }
+  const meta = { projectName: project.name || project.projectNumber, klantName: project.klant.name };
+  if (project.locationSharePassword) {
+    res.json({ requiresPassword: true, ...meta });
+    return;
+  }
+  res.json({ requiresPassword: false, ...meta, locations: await buildSharedLocations(project.id) });
+});
+
+// POST: verifieer wachtwoord en geef het overzicht terug.
+router.post('/share/locations/:token', async (req: Request, res: Response) => {
+  const { password } = req.body as { password?: string };
+  const project = await prisma.project.findUnique({
+    where: { locationShareToken: String(req.params.token) },
+    select: { id: true, name: true, projectNumber: true, locationSharePassword: true, klant: { select: { name: true } } },
+  });
+  if (!project) { res.status(404).json({ error: 'Deel-link niet gevonden' }); return; }
+  if (project.locationSharePassword) {
+    const ok = typeof password === 'string' && password === project.locationSharePassword;
+    if (!ok) { res.status(401).json({ error: 'Onjuist wachtwoord' }); return; }
+  }
+  res.json({
+    requiresPassword: false,
+    projectName: project.name || project.projectNumber,
+    klantName: project.klant.name,
+    locations: await buildSharedLocations(project.id),
+  });
 });
 
 export default router;
