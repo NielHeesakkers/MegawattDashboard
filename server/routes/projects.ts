@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -8,7 +8,6 @@ import { logAudit } from '../lib/audit';
 import { uploadsDir, fileUpload } from '../middleware/upload';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const PROJECT_INCLUDE = {
   klant: { select: { id: true, name: true, logo: true } },

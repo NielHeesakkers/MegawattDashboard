@@ -1,10 +1,9 @@
 import { Router, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Protected: get all clients
 router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {

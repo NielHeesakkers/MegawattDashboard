@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
 import { selectBackupsToKeep, parseBackupDate } from '../lib/backupRetention';
@@ -11,7 +11,6 @@ import fs from 'fs';
 import os from 'os';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const PROJECT_ROOT = __dirname.includes(path.join('dist', 'server'))
   ? path.resolve(__dirname, '../../..')
@@ -21,7 +20,8 @@ const uploadsDir = path.resolve(PROJECT_ROOT, 'uploads');
 
 // Pad naar de actieve SQLite-database. Prisma lost relatieve file:-paden op t.o.v. de prisma/-map.
 function resolveDbPath(): string {
-  let p = (process.env.DATABASE_URL || '').replace(/^file:/, '');
+  // Strip 'file:'-prefix én eventuele ?query-params (bv. ?connection_limit=1).
+  let p = (process.env.DATABASE_URL || '').replace(/^file:/, '').replace(/\?.*$/, '');
   if (!path.isAbsolute(p)) p = path.resolve(PROJECT_ROOT, 'prisma', p);
   return p;
 }
@@ -80,8 +80,8 @@ const importUpload = multer({
   },
 });
 
+// Oud back-up-formaat (data.json) — alleen nog gelezen bij het herstellen van oude backups.
 interface BackupData {
-  version: number;
   exportedAt: string;
   executives: any[];
   teams: any[];
@@ -146,35 +146,45 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
         res.status(400).json({ error: 'Ongeldige database in backup' });
         return;
       }
-      // Uploads vervangen
-      if (fs.existsSync(uploadsDir)) {
-        for (const file of fs.readdirSync(uploadsDir)) {
-          fs.rmSync(path.join(uploadsDir, file), { recursive: true, force: true });
-        }
-      } else {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-      const extractedUploads = path.join(tmpDir, 'uploads');
-      if (fs.existsSync(extractedUploads)) copyRecursive(extractedUploads, uploadsDir);
 
-      // Database stagen; daadwerkelijke swap + herstart ná de response.
-      const staged = `${dbPath}.restore`;
-      fs.copyFileSync(dbInZip, staged);
+      // Alles eerst stagen buiten tmpDir (tmpDir wordt in de finally opgeruimd), zodat
+      // de eigenlijke swap pas ná de response gebeurt en atomair is.
+      const stagedDb = `${dbPath}.restore`;
+      fs.copyFileSync(dbInZip, stagedDb);
+
+      const extractedUploads = path.join(tmpDir, 'uploads');
+      const stagedUploads = `${uploadsDir}.restore`;
+      fs.rmSync(stagedUploads, { recursive: true, force: true });
+      const hasUploads = fs.existsSync(extractedUploads);
+      if (hasUploads) {
+        fs.mkdirSync(stagedUploads, { recursive: true });
+        copyRecursive(extractedUploads, stagedUploads);
+      }
+
       await logAudit('UPDATE', 'Backup', 0, { action: 'restore-database' }, req.adminUsername);
       res.json({ success: true, restored: 'database', restart: true });
 
       setTimeout(async () => {
         try {
           await prisma.$disconnect();
-          for (const suffix of ['-wal', '-shm', '']) {
+          // WAL/SHM weg, dán de DB atomair vervangen. renameSync overschrijft het
+          // bestaande bestand; faalt 'ie, dan blijft de oude DB intact (geen verlies).
+          for (const suffix of ['-wal', '-shm']) {
             try { fs.unlinkSync(`${dbPath}${suffix}`); } catch { /* bestond niet */ }
           }
-          fs.renameSync(staged, dbPath);
-          console.log('[Restore] Database vervangen — server herstart.');
+          fs.renameSync(stagedDb, dbPath);
+          // Pas ná een geslaagde DB-swap de uploads vervangen.
+          if (fs.existsSync(uploadsDir)) fs.rmSync(uploadsDir, { recursive: true, force: true });
+          if (hasUploads) fs.renameSync(stagedUploads, uploadsDir);
+          else fs.mkdirSync(uploadsDir, { recursive: true });
+          console.log('[Restore] Database + uploads vervangen — server herstart.');
+          process.exit(0);
         } catch (e) {
-          console.error('[Restore] Swap mislukt:', e);
+          // Swap mislukt: oude DB + uploads ongewijzigd. Staging opruimen, NIET herstarten.
+          console.error('[Restore] Swap mislukt, database ongewijzigd:', e);
+          try { fs.rmSync(stagedDb, { force: true }); } catch { /* ignore */ }
+          try { fs.rmSync(stagedUploads, { recursive: true, force: true }); } catch { /* ignore */ }
         }
-        process.exit(0);
       }, 500);
       return;
     }

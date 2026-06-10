@@ -1,11 +1,10 @@
 import { Router, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { upload, processPhotoTo, deletePhoto } from '../middleware/upload';
 import { logAudit } from '../lib/audit';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Get all superchargers
 router.get('/', authMiddleware, async (_req: AuthRequest, res: Response) => {

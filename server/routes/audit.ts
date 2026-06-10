@@ -1,11 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const PROJECT_ROOT = __dirname.includes(path.join('dist', 'server'))
   ? path.resolve(__dirname, '../../..')

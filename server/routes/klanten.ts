@@ -1,12 +1,11 @@
 import { Router, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { upload, deletePhoto } from '../middleware/upload';
 import { logAudit } from '../lib/audit';
 import { saveLogoFile, autoFetchLogo } from '../lib/logo';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const KLANTEN_SUBDIR = 'Klanten';
 

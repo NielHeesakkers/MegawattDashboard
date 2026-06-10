@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -8,7 +8,6 @@ import { authMiddleware, AuthRequest, adminOnly, adminOrSuperuser } from '../mid
 import { logAudit } from '../lib/audit';
 
 const router = Router();
-const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'megawatt-dashboard-secret-2026';
 const AVAILABLE_TABS = [
   'klanten', 'toeleveranciers',

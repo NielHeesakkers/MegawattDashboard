@@ -1,12 +1,11 @@
 import { Router, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { authMiddleware, adminOrSuperuser, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
 import { emailLayout } from '../lib/email';
 import { getEmailSettings, isEmailConfigured, sendMail, verifyConnection, EmailMethod } from '../lib/mailer';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const MASK = '••••••••';
 

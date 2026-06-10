@@ -1,42 +1,29 @@
-import { useState, useEffect } from 'react';
-import { fetchToeleveranciers, createToeleverancier, updateToeleverancier, deleteToeleverancier, refreshToeleverancierLogo, Toeleverancier, fetchSpecialismes, createSpecialisme, deleteSpecialisme, Specialisme } from '../../api';
+import { useState } from 'react';
+import { fetchToeleveranciers, createToeleverancier, updateToeleverancier, deleteToeleverancier, refreshToeleverancierLogo, Toeleverancier } from '../../api';
 import ContactenManager from './ContactenManager';
-import { useToast } from '../ui/Toast';
+import { useSpecialismes } from '../../hooks/useSpecialismes';
 
 // ─── Instellingen tab ────────────────────────────────────────────────────────
 
 function InstellingenTab() {
-  const [specialismes, setSpecialismes] = useState<Specialisme[]>([]);
+  const { specialismes, addSpecialisme, removeSpecialisme } = useSpecialismes();
   const [newNaam, setNewNaam] = useState('');
   const [adding, setAdding] = useState(false);
   const [showInput, setShowInput] = useState(false);
-  const toast = useToast();
-
-  useEffect(() => {
-    fetchSpecialismes().then(setSpecialismes);
-  }, []);
 
   async function handleAdd() {
     if (!newNaam.trim()) return;
     setAdding(true);
     try {
-      const created = await createSpecialisme(newNaam.trim());
-      setSpecialismes((prev) => [...prev, created].sort((a, b) => a.naam.localeCompare(b.naam)));
+      await addSpecialisme(newNaam.trim());
       setNewNaam('');
       setShowInput(false);
-      toast.success('Specialisme toegevoegd');
-    } catch {
-      toast.error('Specialisme bestaat al');
     } finally {
       setAdding(false);
     }
   }
 
-  async function handleDelete(id: number) {
-    await deleteSpecialisme(id);
-    setSpecialismes((prev) => prev.filter((s) => s.id !== id));
-    toast.success('Specialisme verwijderd');
-  }
+  const handleDelete = removeSpecialisme;
 
   return (
     <div className="max-w-lg">

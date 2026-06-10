@@ -1,10 +1,9 @@
 import { Router, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Admin: reorder members within client team — must be above /:id to avoid being caught by it
 router.put('/reorder/batch', authMiddleware, async (req: AuthRequest, res: Response) => {

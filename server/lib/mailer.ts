@@ -1,7 +1,6 @@
 import nodemailer from 'nodemailer';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './prisma';
 
-const prisma = new PrismaClient();
 
 export type EmailMethod = 'smtp' | 'graph';
 

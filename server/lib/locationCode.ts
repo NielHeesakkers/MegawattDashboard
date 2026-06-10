@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './prisma';
 
-const prisma = new PrismaClient();
 
 // Strip diacritics + non-letters, take first 3 letters uppercase. "Amsterdam" -> "AMS".
 export function cityPrefix(city: string | null | undefined): string | null {

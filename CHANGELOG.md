@@ -5,6 +5,11 @@ Vanaf 1.6.0 per release `+0.0.1` omhoog.
 
 ## [Unreleased]
 
+### Verholpen / robuustheid
+- **Restore is nu atomair en kan geen data verliezen.** De database wordt atomair vervangen (rename i.p.v. eerst verwijderen); mislukt de swap, dan blijft de oude database + uploads ongewijzigd en herstart de server niet. Uploads worden pas vervangen ná een geslaagde DB-swap.
+- **Eén gedeelde `PrismaClient` voor de hele server** (i.p.v. ~20 losse). Sluit alle DB-toegang netjes vóór een restore en scheelt connecties.
+- **"+ specialisme"**: geen dubbele aanmaak meer (Enter + blur), blur slaat nu op i.p.v. te annuleren, en een al bestaande naam wordt geselecteerd i.p.v. een foutmelding. Aanmaak-/lijstlogica gedeeld via één hook.
+
 ### Gewijzigd
 - **Deel-link toont locaties standaard zichtbaar, behalve status "nee".** Voorheen werden alleen locaties met "ja" getoond; nu zijn ook "onbekend"-locaties zichtbaar en verbergt alleen "nee" een locatie.
 - **Backups zijn nu volledig én blijven bestaan tussen versies.** Een backup is voortaan een consistente snapshot van de héle SQLite-database (alle tabellen, incl. toeleveranciers, superchargers, e-mailinstellingen, project-locatie-koppelingen) + alle uploads — niet langer een handmatige selectie tabellen. Backups worden geschreven naast de database in het persistente data-volume, zodat ze een deploy overleven (voorheen verdwenen ze bij elke nieuwe versie). Restore vervangt de database en herstart de server; oude (JSON-)backups blijven herstelbaar.

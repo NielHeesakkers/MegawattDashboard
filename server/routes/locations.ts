@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Router, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import multer from 'multer';
 import sharp from 'sharp';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
@@ -11,7 +11,6 @@ import { generateLocationCode } from '../lib/locationCode';
 import { uploadsDir } from '../middleware/upload';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const photoUpload = multer({
   storage: multer.memoryStorage(),
