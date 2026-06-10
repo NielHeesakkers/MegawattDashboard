@@ -11,9 +11,6 @@ interface Props {
   hasTab: (tab: string) => boolean;
   isAdmin: boolean;
   username: string | null;
-  onExportPdf: () => void;
-  onExportJpg: () => void;
-  onEmailShare: () => void;
   onLogout: () => void;
 }
 
@@ -117,18 +114,8 @@ function SearchSection({ title, items, onClick }: { title: string; items: Search
 }
 
 // ── Sidebar (admin-stijl) ────────────────────────────────────────────────────
-export default function Sidebar({ viewMode, onViewMode, hasTab, isAdmin, username, onExportPdf, onExportJpg, onEmailShare, onLogout }: Props) {
-  const [exportOpen, setExportOpen] = useState(false);
+export default function Sidebar({ viewMode, onViewMode, hasTab, isAdmin, username, onLogout }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const exportRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false);
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
 
   // Sluit mobiele sidebar bij viewMode wijziging
   useEffect(() => { setSidebarOpen(false); }, [viewMode]);
@@ -196,28 +183,6 @@ export default function Sidebar({ viewMode, onViewMode, hasTab, isAdmin, usernam
 
       {/* Sticky bottom acties */}
       <div className="flex-shrink-0 pt-3 border-t border-[rgba(255,255,255,0.08)] mt-auto flex flex-col gap-1">
-        {/* Export dropdown */}
-        <div ref={exportRef} className="relative">
-          <button
-            onClick={() => setExportOpen(!exportOpen)}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-[6px] text-[14px] text-[rgba(255,255,255,0.7)] hover:text-[rgba(255,255,255,0.9)] cursor-pointer"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15m0-3-3-3m0 0-3 3m3-3V15" />
-            </svg>
-            Exporteren
-          </button>
-          {exportOpen && (
-            <div className="absolute bottom-full left-0 right-0 mb-1 bg-bg-surface rounded-lg ring-1 ring-[rgba(255,255,255,0.12)] shadow-2xl overflow-hidden">
-              <button onClick={() => { setExportOpen(false); onExportPdf(); }} className="w-full text-left px-3 py-2 text-[13px] text-white/80 hover:bg-white/8 cursor-pointer">📄 PDF</button>
-              <button onClick={() => { setExportOpen(false); onExportJpg(); }} className="w-full text-left px-3 py-2 text-[13px] text-white/80 hover:bg-white/8 cursor-pointer">🖼 JPG</button>
-              {localStorage.getItem('token') && (
-                <button onClick={() => { setExportOpen(false); onEmailShare(); }} className="w-full text-left px-3 py-2 text-[13px] text-white/80 hover:bg-white/8 cursor-pointer">✉ E-mail</button>
-              )}
-            </div>
-          )}
-        </div>
-
         {isAdmin && (
           <Link to="/admin" className="flex items-center gap-2 px-3 py-2 rounded-[6px] text-[14px] text-[rgba(255,255,255,0.7)] hover:text-[rgba(255,255,255,0.9)]">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

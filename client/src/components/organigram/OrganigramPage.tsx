@@ -17,6 +17,7 @@ import KlantenManager from '../admin/KlantenManager';
 import ToeleveranciersManager from '../admin/ToeleveranciersManager';
 import ContactenManager from '../admin/ContactenManager';
 import Sidebar from './Sidebar';
+import ExportMenu from './ExportMenu';
 import { ALL_PERMISSION_KEYS } from '../../shared/permissions';
 import { fetchToeleveranciers, createToeleverancier, updateToeleverancier, deleteToeleverancier, refreshToeleverancierLogo, Toeleverancier } from '../../api';
 import ProjectList from '../admin/ProjectList';
@@ -391,12 +392,21 @@ export default function OrganigramPage() {
         hasTab={hasTab}
         isAdmin={isAdmin}
         username={username}
-        onExportPdf={handleExportPdf}
-        onExportJpg={handleExportJpg}
-        onEmailShare={() => setEmailShareOpen(true)}
         onLogout={logout}
       />
       <div className="flex-1 min-w-0 h-screen overflow-auto">
+      {/* Exporteren — alleen op Organigram + Klantteams, linksboven in het content-deel */}
+      {(viewMode === 'dashboard' || viewMode === 'klantteams') && (
+        <div className="sticky top-0 z-30 px-6 pt-4 pointer-events-none">
+          <div className="inline-block pointer-events-auto">
+            <ExportMenu
+              onPdf={handleExportPdf}
+              onJpg={handleExportJpg}
+              onEmail={localStorage.getItem('token') ? () => setEmailShareOpen(true) : undefined}
+            />
+          </div>
+        </div>
+      )}
       {/* Old header (verborgen, wordt vervangen door sidebar) */}
       <header className="hidden sticky top-0 z-40 bg-[rgba(15,31,29,0.9)] backdrop-blur-md border-b border-[rgba(255,255,255,0.08)]">
         <div className="mx-auto px-6 py-3 flex flex-col sm:flex-row items-center gap-4">

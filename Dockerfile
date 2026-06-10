@@ -42,6 +42,9 @@ COPY --from=builder /app/package.json .
 # Copy Prisma schema + migrations + seed (needed for migrate deploy + first-run seed)
 COPY prisma/ prisma/
 
+# Changelog (gelezen door de Versiegeschiedenis-pagina via /api/audit-logs/changelog)
+COPY CHANGELOG.md ./
+
 # Copy face-crop source (needed by seed.ts via tsx)
 COPY --from=builder /app/server/lib/face-crop.ts server/lib/
 

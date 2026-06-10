@@ -8,4 +8,5 @@ prisma/dev.db-journal
 uploads/*
 !uploads/.gitkeep
 *.md
+!CHANGELOG.md
 .git
