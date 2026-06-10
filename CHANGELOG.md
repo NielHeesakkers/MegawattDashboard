@@ -5,6 +5,10 @@ Vanaf 1.6.0 per release `+0.0.1` omhoog.
 
 ## [Unreleased]
 
+_Nog niets — volgende release wordt 1.6.2._
+
+## v1.6.1 — 10 juni 2026
+
 ### Verholpen / robuustheid
 - **Versiegeschiedenis-pagina was leeg op de live dashboard** — `CHANGELOG.md` zat niet in de Docker-image (uitgesloten door `*.md` in `.dockerignore`), waardoor de server 'm niet kon lezen. Image bevat nu de changelog.
 - **Restore is nu atomair en kan geen data verliezen.** De database wordt atomair vervangen (rename i.p.v. eerst verwijderen); mislukt de swap, dan blijft de oude database + uploads ongewijzigd en herstart de server niet. Uploads worden pas vervangen ná een geslaagde DB-swap.
