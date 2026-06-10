@@ -715,10 +715,11 @@ function LocTabPanel({ tab, locations, superchargers, projectId, voters, onPatch
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestions = useMemo(() => {
     const q = tab.locationCodeInput.trim().toUpperCase();
-    if (!q) return [];
-    return locations
-      .filter((l) => l.code?.toUpperCase().startsWith(q) || l.naam.toUpperCase().includes(q))
-      .slice(0, 8);
+    // Lege input → volledige lijst (verschijnt bij focus); typen filtert.
+    const matches = q
+      ? locations.filter((l) => l.code?.toUpperCase().startsWith(q) || l.naam.toUpperCase().includes(q))
+      : locations;
+    return [...matches].sort((a, b) => (a.code ?? '').localeCompare(b.code ?? '') || a.naam.localeCompare(b.naam));
   }, [locations, tab.locationCodeInput]);
 
   const dailyCents = (tab.locationData?.costs ?? []).reduce((s, c) => s + c.bedragCents, 0);

@@ -4,12 +4,11 @@ import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import multer from 'multer';
 import sharp from 'sharp';
-import { authMiddleware, adminOnly, AuthRequest } from '../middleware/auth';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
 import { geocode, formatAddress, suggest } from '../lib/geocode';
 import { generateLocationCode } from '../lib/locationCode';
 import { uploadsDir } from '../middleware/upload';
-import { q2Locaties, q2Toeleveranciers } from '../data/q2Import';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -296,34 +295,6 @@ router.post('/backfill-codes', authMiddleware, async (_req: AuthRequest, res: Re
     results.push({ id: loc.id, code, stad });
   }
   res.json({ count: results.length, results });
-});
-
-// POST /api/locations/import-q2 — eenmalige bulk-import van de Q2-CSV (locaties + toeleveranciers).
-// Idempotent: slaat bestaande over op naam.
-router.post('/import-q2', authMiddleware, adminOnly, async (_req: AuthRequest, res: Response) => {
-  let locCreated = 0, locSkipped = 0, toeCreated = 0, toeSkipped = 0;
-  for (const l of q2Locaties) {
-    if (await prisma.location.findFirst({ where: { naam: l.naam, adres: l.adres } })) { locSkipped++; continue; }
-    const code = await generateLocationCode(l.stad || null);
-    await prisma.location.create({
-      data: {
-        code, naam: l.naam, land: l.land, stad: l.stad || null,
-        adres: l.adres, lat: l.lat, lng: l.lng, m2: l.m2, notities: l.notities || '',
-      },
-    });
-    locCreated++;
-  }
-  for (const t of q2Toeleveranciers) {
-    if (await prisma.toeleverancier.findFirst({ where: { name: t.name } })) { toeSkipped++; continue; }
-    await prisma.toeleverancier.create({
-      data: {
-        name: t.name, land: t.land || null, stad: t.stad || null,
-        adres: t.adres || null, postcode: t.postcode || null, email: t.email || null,
-      },
-    });
-    toeCreated++;
-  }
-  res.json({ locCreated, locSkipped, toeCreated, toeSkipped });
 });
 
 // POST /api/locations/:id/photos — upload één of meerdere foto's

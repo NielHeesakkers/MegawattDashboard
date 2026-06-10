@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  exportBackup, importBackup, clearAllData, importQ2,
+  exportBackup, importBackup, clearAllData,
   fetchEmailSettings, updateEmailSettings, sendTestEmail, testEmailConnection, EmailMethod,
   fetchBackupList, downloadBackup, deleteBackup, triggerAutoBackup, BackupFile,
   fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser, sendWelcomeEmail, AdminUser,
@@ -45,19 +45,6 @@ function DataTab() {
   const [backups, setBackups] = useState<BackupFile[]>([]);
   const [showAllBackups, setShowAllBackups] = useState(false);
   const [creatingBackup, setCreatingBackup] = useState(false);
-  const [importingQ2, setImportingQ2] = useState(false);
-
-  const handleImportQ2 = async () => {
-    setImportingQ2(true);
-    try {
-      const r = await importQ2();
-      toast.success(`Geïmporteerd: ${r.locCreated} locaties (${r.locSkipped} overgeslagen), ${r.toeCreated} toeleveranciers (${r.toeSkipped} overgeslagen)`);
-    } catch {
-      toast.error('Import mislukt');
-    } finally {
-      setImportingQ2(false);
-    }
-  };
 
   const loadBackups = () => {
     fetchBackupList().then(setBackups).catch(() => {});
@@ -172,24 +159,6 @@ function DataTab() {
           )}
           {clearing ? 'Wissen...' : 'Alles wissen'}
         </button>
-      </div>
-
-      {/* Eenmalige Q2-import */}
-      <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-3">Locaties importeren (Q2)</h3>
-      <div className="mb-8">
-        <button
-          onClick={handleImportQ2}
-          disabled={importingQ2}
-          className="flex items-center gap-2 px-4 py-2 rounded-[8px] bg-accent text-bg-dark text-sm font-semibold hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-        >
-          {importingQ2 ? (
-            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-          ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-          )}
-          {importingQ2 ? 'Importeren...' : 'Importeer Q2: 59 locaties + 8 toeleveranciers'}
-        </button>
-        <p className="text-text-muted text-xs mt-2">Eenmalige import uit de Q2-lijst. Locaties/toeleveranciers met een bestaande naam worden overgeslagen (veilig om nogmaals te draaien).</p>
       </div>
 
       {/* Backup list */}

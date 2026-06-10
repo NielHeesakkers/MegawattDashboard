@@ -6,7 +6,7 @@ Vanaf 1.6.0 per release `+0.0.1` omhoog.
 ## [Unreleased]
 
 ### Toegevoegd
-- **Eenmalige Q2-import** (Gegevensbeheer → "Importeer Q2"): bulk-import van 59 locaties (geocodeerd) + 8 toeleveranciers uit de Q2-lijst. Idempotent op naam+adres. Tijdelijke knop — na gebruik te verwijderen.
+- **Locatieveld in projectformulier** toont bij focus direct de volledige locatielijst (gesorteerd op code); typen filtert.
 
 ## v1.6.0 — 10 juni 2026
 
