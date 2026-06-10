@@ -65,15 +65,28 @@ jobs:
             echo "Portainer-secrets ontbreken — redeploy overgeslagen."
             exit 0
           fi
-          echo "Huidige stack ophalen…"
+          IMAGE="ghcr.io/nielheesakkers/megawatt-dashboard"
+          echo "1/3 Nieuwe image pullen op de server (Docker-API via Portainer)…"
+          curl -fsS --max-time 600 -X POST -H "X-API-Key: $PORTAINER_API_KEY" \
+            "$PORTAINER_URL/api/endpoints/$ENDPOINT_ID/docker/images/create?fromImage=$IMAGE&tag=latest" -o /dev/null
+          echo "2/3 Stack opnieuw uitrollen…"
           stack=$(curl -fsS -H "X-API-Key: $PORTAINER_API_KEY" "$PORTAINER_URL/api/stacks/$STACK_ID")
           file=$(curl -fsS -H "X-API-Key: $PORTAINER_API_KEY" "$PORTAINER_URL/api/stacks/$STACK_ID/file" | jq -r '.StackFileContent')
           env=$(printf '%s' "$stack" | jq -c '.Env // []')
-          echo "Stack opnieuw uitrollen met re-pull…"
           curl -fsS -X PUT \
             -H "X-API-Key: $PORTAINER_API_KEY" \
             -H "Content-Type: application/json" \
             "$PORTAINER_URL/api/stacks/$STACK_ID?endpointId=$ENDPOINT_ID" \
             -d "$(jq -n --arg f "$file" --argjson e "$env" '{stackFileContent:$f, env:$e, pullImage:true, prune:false}')" \
-            -o /dev/null -w "HTTP %{http_code}\n"
-          echo "Redeploy klaar."
+            -o /dev/null -w "stack update: HTTP %{http_code}\n"
+          echo "3/3 Verifiëren dat de container op de nieuwe image draait…"
+          sleep 5
+          img_id=$(curl -fsS -H "X-API-Key: $PORTAINER_API_KEY" "$PORTAINER_URL/api/endpoints/$ENDPOINT_ID/docker/images/$IMAGE:latest/json" | jq -r '.Id')
+          ctr_img=$(curl -fsS -H "X-API-Key: $PORTAINER_API_KEY" "$PORTAINER_URL/api/endpoints/$ENDPOINT_ID/docker/containers/megawatt-dashboard/json" | jq -r '.Image')
+          echo "image :latest = $img_id"
+          echo "container     = $ctr_img"
+          if [ "$img_id" != "$ctr_img" ]; then
+            echo "::error::Container draait NIET op de nieuwe image — redeploy mislukt."
+            exit 1
+          fi
+          echo "Redeploy geverifieerd: container draait op de nieuwe image."
