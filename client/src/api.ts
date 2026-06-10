@@ -686,6 +686,12 @@ export async function createLocation(input: LocationWriteInput): Promise<Locatio
   return data;
 }
 
+export interface Q2ImportResult { locCreated: number; locSkipped: number; toeCreated: number; toeSkipped: number; }
+export async function importQ2(): Promise<Q2ImportResult> {
+  const { data } = await api.post('/locations/import-q2');
+  return data;
+}
+
 export async function updateLocation(id: number, input: LocationWriteInput): Promise<Location> {
   const { data } = await api.put(`/locations/${id}`, input);
   return data;

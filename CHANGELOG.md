@@ -5,7 +5,8 @@ Vanaf 1.6.0 per release `+0.0.1` omhoog.
 
 ## [Unreleased]
 
-_Nog niets — volgende release wordt 1.6.1._
+### Toegevoegd
+- **Eenmalige Q2-import** (Gegevensbeheer → "Importeer Q2"): bulk-import van 59 locaties (geocodeerd) + 8 toeleveranciers uit de Q2-lijst. Idempotent op naam+adres. Tijdelijke knop — na gebruik te verwijderen.
 
 ## v1.6.0 — 10 juni 2026
 

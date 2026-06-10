@@ -113,6 +113,7 @@ export default function AdminLayout() {
           </svg>
           Uitloggen
         </button>
+        <p className="text-text-muted/60 text-[10px] text-center mt-1.5">v{__APP_VERSION__}</p>
       </div>
     </>
   );
