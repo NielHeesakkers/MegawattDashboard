@@ -72,6 +72,17 @@ export default function ResetPasswordPage() {
 
         {!validating && valid && !success && (
           <form onSubmit={handleSubmit}>
+            {/* Verborgen gebruikersnaam zodat Safari/Keychain het wachtwoord aan het account koppelt */}
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              value={username}
+              readOnly
+              aria-hidden="true"
+              tabIndex={-1}
+              style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+            />
             <p className="text-[rgba(255,255,255,0.7)] text-sm mb-1">Hi <strong className="text-white">{username}</strong>,</p>
             <p className="text-[rgba(255,255,255,0.5)] text-sm mb-5">Stel een nieuw wachtwoord in.</p>
 
@@ -79,11 +90,11 @@ export default function ResetPasswordPage() {
 
             <div className="mb-3">
               <label className="block text-text-secondary text-sm mb-1">Nieuw wachtwoord</label>
-              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} className={inputCls} required minLength={6} autoFocus />
+              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} className={inputCls} required minLength={6} autoFocus autoComplete="new-password" />
             </div>
             <div className="mb-5">
               <label className="block text-text-secondary text-sm mb-1">Bevestig wachtwoord</label>
-              <input type="password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} className={inputCls} required minLength={6} />
+              <input type="password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} className={inputCls} required minLength={6} autoComplete="new-password" />
             </div>
             <button type="submit" disabled={submitting} className="w-full py-2.5 rounded-[6px] bg-accent-teal text-[#1a3a38] font-semibold hover:opacity-85 transition-opacity disabled:opacity-50 cursor-pointer">
               {submitting ? 'Bezig…' : 'Wachtwoord opslaan'}

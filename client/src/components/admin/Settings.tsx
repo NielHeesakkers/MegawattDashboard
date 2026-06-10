@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   exportBackup, importBackup, clearAllData,
-  fetchEmailSettings, updateEmailSettings, sendTestEmail,
+  fetchEmailSettings, updateEmailSettings, sendTestEmail, testEmailConnection, EmailMethod,
   fetchBackupList, downloadBackup, deleteBackup, triggerAutoBackup, BackupFile,
   fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser, sendWelcomeEmail, AdminUser,
   fetchAuditLogs, AuditLogEntry,
 } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../ui/Toast';
-import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Modal from '../ui/Modal';
 import { PERMISSION_GROUPS, ALL_PERMISSION_KEYS } from '../../shared/permissions';
@@ -272,50 +272,74 @@ function DataTab() {
 function EmailTab() {
   const toast = useToast();
   const [emailConfigured, setEmailConfigured] = useState(false);
+  const [method, setMethod] = useState<EmailMethod>('smtp');
   const [smtpHost, setSmtpHost] = useState('');
   const [smtpPort, setSmtpPort] = useState(587);
   const [smtpUser, setSmtpUser] = useState('');
   const [smtpPass, setSmtpPass] = useState('');
+  const [graphTenantId, setGraphTenantId] = useState('');
+  const [graphClientId, setGraphClientId] = useState('');
+  const [graphClientSecret, setGraphClientSecret] = useState('');
   const [fromEmail, setFromEmail] = useState('');
   const [fromName, setFromName] = useState('');
   const [testEmail, setTestEmail] = useState('');
-  const [savingEmail, setSavingEmail] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [sendingTest, setSendingTest] = useState(false);
-  const [savedValues, setSavedValues] = useState({ smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', fromEmail: '', fromName: '' });
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [savedValues, setSavedValues] = useState({ method: 'smtp' as EmailMethod, smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', graphTenantId: '', graphClientId: '', graphClientSecret: '', fromEmail: '', fromName: '' });
 
-  const isDirty = smtpHost !== savedValues.smtpHost || smtpPort !== savedValues.smtpPort ||
+  const isDirty = method !== savedValues.method ||
+    smtpHost !== savedValues.smtpHost || smtpPort !== savedValues.smtpPort ||
     smtpUser !== savedValues.smtpUser || smtpPass !== savedValues.smtpPass ||
+    graphTenantId !== savedValues.graphTenantId || graphClientId !== savedValues.graphClientId || graphClientSecret !== savedValues.graphClientSecret ||
     fromEmail !== savedValues.fromEmail || fromName !== savedValues.fromName;
-  useUnsavedChanges(isDirty);
+  const canSave = !!fromEmail && (method === 'smtp' ? (!!smtpHost && !!smtpUser) : (!!graphTenantId && !!graphClientId));
 
   useEffect(() => {
     fetchEmailSettings().then((data) => {
       setEmailConfigured(data.configured);
+      setMethod(data.method || 'smtp');
       setSmtpHost(data.smtpHost);
       setSmtpPort(data.smtpPort || 587);
       setSmtpUser(data.smtpUser);
       setSmtpPass(data.smtpPass);
+      setGraphTenantId(data.graphTenantId || '');
+      setGraphClientId(data.graphClientId || '');
+      setGraphClientSecret(data.graphClientSecret || '');
       setFromEmail(data.fromEmail);
       setFromName(data.fromName);
-      setSavedValues({ smtpHost: data.smtpHost, smtpPort: data.smtpPort || 587, smtpUser: data.smtpUser, smtpPass: data.smtpPass, fromEmail: data.fromEmail, fromName: data.fromName });
+      setSavedValues({ method: data.method || 'smtp', smtpHost: data.smtpHost, smtpPort: data.smtpPort || 587, smtpUser: data.smtpUser, smtpPass: data.smtpPass, graphTenantId: data.graphTenantId || '', graphClientId: data.graphClientId || '', graphClientSecret: data.graphClientSecret || '', fromEmail: data.fromEmail, fromName: data.fromName });
     }).catch(() => {});
   }, []);
 
-  const handleSaveEmailSettings = async () => {
-    setSavingEmail(true);
+  const saveSettings = async () => {
+    setAutoSaveStatus('saving');
     try {
-      await updateEmailSettings({ smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, fromName });
-      setEmailConfigured(!!(smtpHost && smtpUser && smtpPass && fromEmail));
-      setSavedValues({ smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, fromName });
-      toast.success('E-mail instellingen opgeslagen');
+      await updateEmailSettings({ method, smtpHost, smtpPort, smtpUser, smtpPass, graphTenantId, graphClientId, graphClientSecret, fromEmail, fromName });
+      setEmailConfigured(method === 'graph'
+        ? !!(graphTenantId && graphClientId && graphClientSecret && fromEmail)
+        : !!(smtpHost && smtpUser && smtpPass && fromEmail));
+      setSavedValues({ method, smtpHost, smtpPort, smtpUser, smtpPass, graphTenantId, graphClientId, graphClientSecret, fromEmail, fromName });
+      setAutoSaveStatus('saved');
     } catch {
-      toast.error('Opslaan mislukt');
-    } finally {
-      setSavingEmail(false);
+      setAutoSaveStatus('idle');
+      toast.error('Automatisch opslaan mislukt');
     }
   };
 
+  // Auto-save: 800 ms na de laatste wijziging, mits de verplichte velden ingevuld zijn.
+  useEffect(() => {
+    if (!isDirty || !canSave) return;
+    const t = setTimeout(() => { void saveSettings(); }, 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [method, smtpHost, smtpPort, smtpUser, smtpPass, graphTenantId, graphClientId, graphClientSecret, fromEmail, fromName]);
+
+  // Forceer opslaan vóór een test, zodat de test de actuele waarden gebruikt.
+  const ensureSaved = async () => { if (isDirty && canSave) await saveSettings(); };
+
   const handleSendTestEmail = async () => {
+    await ensureSaved();
     setSendingTest(true);
     try {
       await sendTestEmail(testEmail);
@@ -329,56 +353,126 @@ function EmailTab() {
     }
   };
 
+  const handleTestConnection = async () => {
+    await ensureSaved();
+    setTestingConnection(true);
+    try {
+      await testEmailConnection();
+      toast.success('Serververbinding geslaagd');
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'Verbinding mislukt';
+      toast.error(msg);
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
   return (
     <>
       <div className="mb-4 flex items-center gap-2">
         <div className={`w-2.5 h-2.5 rounded-full ${emailConfigured ? 'bg-green-400' : 'bg-red-400'}`} />
         <span className="text-text-secondary text-sm">
-          SMTP: {emailConfigured ? `Geconfigureerd (${smtpHost}:${smtpPort})` : 'Niet geconfigureerd'}
+          {emailConfigured ? `Geconfigureerd via ${method === 'graph' ? 'Microsoft 365' : 'SMTP'}` : 'Niet geconfigureerd'}
         </span>
       </div>
 
       <div className="space-y-4 max-w-md">
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="block text-text-secondary text-sm mb-1">SMTP host *</label>
-            <input type="text" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.gmail.com" className={inputClass} />
-          </div>
-          <div className="w-24">
-            <label className="block text-text-secondary text-sm mb-1">Poort</label>
-            <input type="number" value={smtpPort} onChange={(e) => setSmtpPort(Number(e.target.value))} placeholder="587" className={inputClass} />
-          </div>
-        </div>
         <div>
-          <label className="block text-text-secondary text-sm mb-1">Gebruikersnaam *</label>
-          <input type="text" value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} placeholder="user@gmail.com" className={inputClass} />
+          <label className="block text-text-secondary text-sm mb-2">Verzendmethode</label>
+          <div className="flex gap-2">
+            {([['smtp', 'SMTP'], ['graph', 'Microsoft 365 (Graph)']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setMethod(key)}
+                className={`px-4 py-2 rounded-[8px] text-sm font-medium cursor-pointer transition-all ${
+                  method === key ? 'bg-accent text-bg-dark' : 'bg-[rgba(255,255,255,0.06)] text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div>
-          <label className="block text-text-secondary text-sm mb-1">Wachtwoord *</label>
-          <input type="password" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} placeholder={emailConfigured ? 'Laat leeg om huidig wachtwoord te behouden' : 'App-wachtwoord of SMTP wachtwoord'} className={inputClass} />
-        </div>
+
+        {method === 'smtp' ? (
+          <>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-text-secondary text-sm mb-1">SMTP host *</label>
+                <input type="text" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.office365.com" className={inputClass} />
+              </div>
+              <div className="w-24">
+                <label className="block text-text-secondary text-sm mb-1">Poort</label>
+                <input type="number" value={smtpPort} onChange={(e) => setSmtpPort(Number(e.target.value))} placeholder="587" className={inputClass} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-text-secondary text-sm mb-1">Gebruikersnaam *</label>
+              <input type="text" value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} placeholder="user@domein.nl" className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-text-secondary text-sm mb-1">Wachtwoord *</label>
+              <input type="password" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} placeholder={emailConfigured ? 'Laat leeg om huidig wachtwoord te behouden' : 'App-wachtwoord of SMTP wachtwoord'} className={inputClass} />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="bg-accent-teal/10 border border-accent-teal/30 rounded-lg px-4 py-3 text-accent-teal text-xs leading-relaxed">
+              Maak in <b>Entra ID</b> een app-registratie met <b>Mail.Send</b> (Application) + admin-consent. Vul Tenant-ID, Client-ID en een Client-secret in. De afzender hieronder is de (gedeelde) postbus waar de app namens mag versturen.
+            </div>
+            <div>
+              <label className="block text-text-secondary text-sm mb-1">Tenant-ID *</label>
+              <input type="text" value={graphTenantId} onChange={(e) => setGraphTenantId(e.target.value)} placeholder="00000000-0000-0000-0000-000000000000" className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-text-secondary text-sm mb-1">Client-ID *</label>
+              <input type="text" value={graphClientId} onChange={(e) => setGraphClientId(e.target.value)} placeholder="00000000-0000-0000-0000-000000000000" className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-text-secondary text-sm mb-1">Client-secret *</label>
+              <input type="password" value={graphClientSecret} onChange={(e) => setGraphClientSecret(e.target.value)} placeholder={emailConfigured ? 'Laat leeg om huidige secret te behouden' : 'Client-secret uit Entra ID'} className={inputClass} />
+            </div>
+          </>
+        )}
+
         <div className="border-t border-[rgba(255,255,255,0.06)] pt-4">
           <label className="block text-text-secondary text-sm mb-1">Afzender e-mail *</label>
-          <input type="email" value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} placeholder="noreply@megawatt.nl" className={inputClass} />
+          <input type="email" value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} placeholder="noreply@megawatt.agency" className={inputClass} />
         </div>
         <div>
           <label className="block text-text-secondary text-sm mb-1">Afzender naam</label>
           <input type="text" value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder="Megawatt Dashboard" className={inputClass} />
         </div>
-        <button
-          onClick={handleSaveEmailSettings}
-          disabled={savingEmail || !smtpHost || !smtpUser || !fromEmail}
-          className="flex items-center gap-2 px-4 py-2 rounded-[8px] bg-accent text-bg-dark text-sm font-semibold hover:opacity-85 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-        >
-          {savingEmail && (
-            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-          )}
-          {savingEmail ? 'Opslaan...' : 'Opslaan'}
-        </button>
+        <div className="h-5 flex items-center text-xs">
+          {autoSaveStatus === 'saving' ? (
+            <span className="flex items-center gap-1.5 text-text-muted">
+              <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              Opslaan…
+            </span>
+          ) : isDirty ? (
+            <span className="text-text-muted">Wijzigingen worden automatisch opgeslagen…</span>
+          ) : autoSaveStatus === 'saved' ? (
+            <span className="flex items-center gap-1.5 text-green-400">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+              Opgeslagen
+            </span>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-6 pt-6 border-t border-[rgba(255,255,255,0.06)] max-w-md">
-        <h3 className="text-sm font-medium text-text-secondary mb-3">Test e-mail</h3>
+        <h3 className="text-sm font-medium text-text-secondary mb-3">Testen</h3>
+        <button
+          onClick={handleTestConnection}
+          disabled={testingConnection || !emailConfigured}
+          className="flex items-center gap-2 mb-3 px-4 py-2 rounded-[8px] bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.1)] text-text-primary text-sm hover:bg-[rgba(255,255,255,0.1)] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        >
+          {testingConnection && (
+            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+          )}
+          {testingConnection ? 'Verbinden...' : 'Test server'}
+        </button>
         <div className="flex gap-2">
           <input
             type="email"
@@ -743,10 +837,20 @@ function AuditTab() {
 export default function Settings() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
-  const [activeTab, setActiveTab] = useState<Tab>(isAdmin ? 'users' : 'email');
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Gebruikers-tab alleen voor admins
   const visibleTabs = tabs.filter(t => t.key !== 'users' || isAdmin);
+
+  // Actieve tab uit de URL (?tab=...) zodat een refresh op dezelfde tab blijft.
+  const urlTab = searchParams.get('tab') as Tab | null;
+  const initialTab: Tab = visibleTabs.some((t) => t.key === urlTab) ? (urlTab as Tab) : (isAdmin ? 'users' : 'email');
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+
+  const selectTab = (tab: Tab) => {
+    setActiveTab(tab);
+    setSearchParams({ tab }, { replace: true });
+  };
 
   return (
     <div>
@@ -757,7 +861,7 @@ export default function Settings() {
         {visibleTabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => selectTab(tab.key)}
             className={`px-4 py-2.5 text-sm font-medium transition-all duration-150 border-b-2 -mb-px cursor-pointer ${
               activeTab === tab.key
                 ? 'border-accent text-accent'

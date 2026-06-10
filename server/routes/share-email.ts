@@ -1,23 +1,16 @@
 import { Router, Response } from 'express';
-import nodemailer from 'nodemailer';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
-import { getSmtpSettings } from './settings';
+import { getEmailSettings, isEmailConfigured, sendMail } from '../lib/mailer';
 import { emailLayout } from '../lib/email';
 
 const router = Router();
 
-// POST /api/share-email — send PDF via email
+// POST /api/share-email — stuur een PDF via e-mail
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const smtp = await getSmtpSettings();
-
-  if (!smtp.host || !smtp.user || !smtp.pass) {
-    res.status(400).json({ error: 'SMTP is niet geconfigureerd. Stel dit in via Instellingen.' });
-    return;
-  }
-
-  if (!smtp.fromEmail) {
-    res.status(400).json({ error: 'E-mail afzender is niet geconfigureerd. Stel dit in via Instellingen.' });
+  const settings = await getEmailSettings();
+  if (!isEmailConfigured(settings)) {
+    res.status(400).json({ error: 'E-mail is niet geconfigureerd. Stel dit in via Instellingen.' });
     return;
   }
 
@@ -34,13 +27,6 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: smtp.host,
-      port: smtp.port,
-      secure: smtp.port === 465,
-      auth: { user: smtp.user, pass: smtp.pass },
-    });
-
     const emailSubject = subject || 'Megawatt Organigram';
     const attachmentName = fileName || 'MEGAWATT-Organigram.pdf';
     const isKlantteams = (subject || '').toLowerCase().includes('klantteam');
@@ -57,18 +43,15 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       </div>
     `);
 
-    await transporter.sendMail({
-      from: smtp.fromName ? `"${smtp.fromName}" <${smtp.fromEmail}>` : smtp.fromEmail,
+    await sendMail({
       to,
       subject: emailSubject,
       html: bodyHtml,
-      attachments: [
-        {
-          filename: attachmentName,
-          content: Buffer.from(pdfBase64, 'base64'),
-          contentType: 'application/pdf',
-        },
-      ],
+      attachments: [{
+        filename: attachmentName,
+        content: Buffer.from(pdfBase64, 'base64'),
+        contentType: 'application/pdf',
+      }],
     });
 
     await logAudit('CREATE', 'Email', 0, { action: 'share', to, subject: emailSubject }, req.adminUsername);

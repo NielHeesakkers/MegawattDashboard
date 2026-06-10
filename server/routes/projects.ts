@@ -74,7 +74,7 @@ function projectShareSlug(projectNumber: string, klantName: string, name: string
 // Alleen-lezen locatie-overzicht voor de publieke deel-pagina (geen interne velden).
 async function buildSharedLocations(projectId: number) {
   const rows = await prisma.projectLocation.findMany({
-    where: { projectId },
+    where: { projectId, available: 'yes' },
     orderBy: { order: 'asc' },
     include: { location: { include: { photos: { orderBy: { order: 'asc' } } } } },
   });
@@ -412,6 +412,21 @@ router.put('/:id/share', authMiddleware, async (req: AuthRequest, res: Response)
   res.json({ shareToken: updated.locationShareToken, password: updated.locationSharePassword });
 });
 
+// Voorkeuren per locatie voor dit project (admin).
+router.get('/:id/preferences', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const projectId = Number(req.params.id);
+  const prefs = await prisma.locationPreference.findMany({
+    where: { projectId },
+    select: { locationId: true, voterName: true, voterEmail: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const byLocation: Record<number, Array<{ name: string; email: string }>> = {};
+  for (const p of prefs) {
+    (byLocation[p.locationId] ||= []).push({ name: p.voterName, email: p.voterEmail });
+  }
+  res.json(byLocation);
+});
+
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   const id = Number(req.params.id);
   await prisma.project.delete({ where: { id } });
@@ -608,7 +623,7 @@ router.get('/share/locations/:token', async (req: Request, res: Response) => {
     select: { id: true, name: true, projectNumber: true, locationSharePassword: true, klant: { select: { name: true } } },
   });
   if (!project) { res.status(404).json({ error: 'Deel-link niet gevonden' }); return; }
-  const meta = { projectName: project.name || project.projectNumber, klantName: project.klant.name };
+  const meta = { projectName: project.name || project.projectNumber, projectNumber: project.projectNumber, klantName: project.klant.name };
   if (project.locationSharePassword) {
     res.json({ requiresPassword: true, ...meta });
     return;
@@ -631,9 +646,48 @@ router.post('/share/locations/:token', async (req: Request, res: Response) => {
   res.json({
     requiresPassword: false,
     projectName: project.name || project.projectNumber,
+    projectNumber: project.projectNumber,
     klantName: project.klant.name,
     locations: await buildSharedLocations(project.id),
   });
+});
+
+// Publiek: voorkeuren van één stemmer (op e-mail) — om de eigen vinkjes te tonen.
+router.get('/share/locations/:token/my-preferences', async (req: Request, res: Response) => {
+  const email = String(req.query.email || '').trim().toLowerCase();
+  if (!email) { res.json({ locationIds: [] }); return; }
+  const project = await prisma.project.findUnique({ where: { locationShareToken: String(req.params.token) }, select: { id: true } });
+  if (!project) { res.status(404).json({ error: 'Deel-link niet gevonden' }); return; }
+  const prefs = await prisma.locationPreference.findMany({ where: { projectId: project.id, voterEmail: email }, select: { locationId: true } });
+  res.json({ locationIds: prefs.map((p) => p.locationId) });
+});
+
+// Publiek: voorkeur aan/uit zetten voor een locatie.
+router.post('/share/locations/:token/preference', async (req: Request, res: Response) => {
+  const { voterName, voterEmail, locationId, preferred } = req.body as { voterName?: string; voterEmail?: string; locationId?: number; preferred?: boolean };
+  const name = String(voterName || '').trim();
+  const email = String(voterEmail || '').trim().toLowerCase();
+  const locId = Number(locationId);
+  if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !Number.isFinite(locId)) {
+    res.status(400).json({ error: 'Naam, geldig e-mailadres en locatie zijn verplicht' });
+    return;
+  }
+  const project = await prisma.project.findUnique({ where: { locationShareToken: String(req.params.token) }, select: { id: true } });
+  if (!project) { res.status(404).json({ error: 'Deel-link niet gevonden' }); return; }
+  // Locatie moet bij dit project horen.
+  const link = await prisma.projectLocation.findFirst({ where: { projectId: project.id, locationId: locId }, select: { id: true } });
+  if (!link) { res.status(400).json({ error: 'Locatie hoort niet bij dit project' }); return; }
+
+  if (preferred) {
+    await prisma.locationPreference.upsert({
+      where: { projectId_locationId_voterEmail: { projectId: project.id, locationId: locId, voterEmail: email } },
+      create: { projectId: project.id, locationId: locId, voterName: name, voterEmail: email },
+      update: { voterName: name },
+    });
+  } else {
+    await prisma.locationPreference.deleteMany({ where: { projectId: project.id, locationId: locId, voterEmail: email } });
+  }
+  res.json({ success: true });
 });
 
 export default router;

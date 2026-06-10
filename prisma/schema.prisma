@@ -234,6 +234,7 @@ model Project {
   locations              ProjectLocation[]
   contacts               ProjectContact[]
   toeleveranciers        ProjectToeleverancier[]
+  locationPreferences    LocationPreference[]
   createdAt              DateTime     @default(now())
   updatedAt              DateTime     @updatedAt
 
@@ -369,6 +370,21 @@ model Location {
   photos       LocationPhoto[]
   costs        LocationCost[]
   projects     ProjectLocation[]
+  preferences  LocationPreference[]
+}
+
+model LocationPreference {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  locationId Int
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  voterName  String
+  voterEmail String
+  createdAt  DateTime @default(now())
+
+  @@unique([projectId, locationId, voterEmail])
+  @@index([projectId])
 }
 
 model LocationContact {

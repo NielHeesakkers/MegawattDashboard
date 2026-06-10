@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import nodemailer from 'nodemailer';
+import { sendMail, getEmailSettings, isEmailConfigured } from '../lib/mailer';
 import { authMiddleware, AuthRequest, adminOnly, adminOrSuperuser } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
 
@@ -125,9 +125,9 @@ router.post('/login', async (req: Request, res: Response) => {
 import { emailLayout, emailButton, emailMeta } from '../lib/email';
 
 async function sendWelcomeEmail(user: { id: number; username: string; email: string }, origin: string, role: string) {
-  const cfg = await getEmailConfig();
-  if (!cfg.host || !cfg.user) {
-    console.warn('SMTP niet geconfigureerd — geen welkomstmail verstuurd');
+  const settings = await getEmailSettings();
+  if (!isEmailConfigured(settings)) {
+    console.warn('E-mail niet geconfigureerd — geen welkomstmail verstuurd');
     return false;
   }
   const token = crypto.randomBytes(32).toString('hex');
@@ -135,11 +135,6 @@ async function sendWelcomeEmail(user: { id: number; username: string; email: str
   await prisma.passwordResetToken.create({ data: { token, userId: user.id, expiresAt } });
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: cfg.host, port: cfg.port,
-      secure: cfg.port === 465,
-      auth: { user: cfg.user, pass: cfg.pass },
-    });
     const setupUrl = `${origin}/reset-password/${token}`;
     const roleLabel = role === 'admin' ? 'Admin' : 'Gebruiker';
 
@@ -157,8 +152,7 @@ async function sendWelcomeEmail(user: { id: number; username: string; email: str
         Werkt de knop niet? Kopieer:<br>${setupUrl}
       </p>`;
 
-    await transporter.sendMail({
-      from: `"${cfg.fromName}" <${cfg.from || cfg.user}>`,
+    await sendMail({
       to: user.email,
       subject: 'Welkom bij Megawatt Dashboard — stel je wachtwoord in',
       html: emailLayout('Welkom bij Megawatt', body),
@@ -168,21 +162,6 @@ async function sendWelcomeEmail(user: { id: number; username: string; email: str
     console.error('Welkomstmail versturen mislukt:', e);
     return false;
   }
-}
-
-async function getEmailConfig() {
-  const keys = ['smtpHost', 'smtpPort', 'smtpUser', 'smtpPass', 'fromEmail', 'fromName'];
-  const settings = await prisma.setting.findMany({ where: { key: { in: keys } } });
-  const map: Record<string, string> = {};
-  settings.forEach(s => { map[s.key] = s.value; });
-  return {
-    host: map.smtpHost || '',
-    port: parseInt(map.smtpPort || '587', 10),
-    user: map.smtpUser || '',
-    pass: map.smtpPass || '',
-    from: map.fromEmail || '',
-    fromName: map.fromName || 'Megawatt Dashboard',
-  };
 }
 
 // POST /api/auth/forgot-password — vraag reset link aan
@@ -212,17 +191,12 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
 
   // Stuur email
   try {
-    const cfg = await getEmailConfig();
-    if (!cfg.host || !cfg.user) {
-      console.error('SMTP niet geconfigureerd — kan reset email niet versturen');
+    const settings = await getEmailSettings();
+    if (!isEmailConfigured(settings)) {
+      console.error('E-mail niet geconfigureerd — kan reset-mail niet versturen');
       res.json(successMsg);
       return;
     }
-    const transporter = nodemailer.createTransport({
-      host: cfg.host, port: cfg.port,
-      secure: cfg.port === 465,
-      auth: { user: cfg.user, pass: cfg.pass },
-    });
     const origin = req.headers.origin || `http://${req.headers.host}`;
     const resetUrl = `${origin}/reset-password/${token}`;
     const resetBody = `
@@ -238,8 +212,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       <p style="color:rgba(255,255,255,0.25);font-size:11px;word-break:break-all;margin:0;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06)">
         Werkt de knop niet? Kopieer:<br>${resetUrl}
       </p>`;
-    await transporter.sendMail({
-      from: `"${cfg.fromName}" <${cfg.from || cfg.user}>`,
+    await sendMail({
       to: user.email,
       subject: 'Wachtwoord resetten — Megawatt Dashboard',
       html: emailLayout('Wachtwoord resetten', resetBody),

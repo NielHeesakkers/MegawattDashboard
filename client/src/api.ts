@@ -540,6 +540,7 @@ export interface SharedLocation {
 export interface SharedLocationsResponse {
   requiresPassword: boolean;
   projectName: string;
+  projectNumber: string;
   klantName: string;
   locations?: SharedLocation[];
 }
@@ -553,6 +554,17 @@ export const fetchSharedLocations = (token: string) =>
   axios.get<SharedLocationsResponse>(`/api/projects/share/locations/${token}`).then((r) => r.data);
 export const verifySharedLocations = (token: string, password: string) =>
   axios.post<SharedLocationsResponse>(`/api/projects/share/locations/${token}`, { password }).then((r) => r.data);
+
+// Locatie-voorkeuren
+export type ProjectPreferences = Record<number, Array<{ name: string; email: string }>>;
+export const fetchProjectPreferences = (id: number) =>
+  api.get<ProjectPreferences>(`/projects/${id}/preferences`).then((r) => r.data);
+
+// Publiek (kale axios, geen 401-interceptor)
+export const fetchMySharedPreferences = (token: string, email: string) =>
+  axios.get<{ locationIds: number[] }>(`/api/projects/share/locations/${token}/my-preferences`, { params: { email } }).then((r) => r.data);
+export const setSharedPreference = (token: string, body: { voterName: string; voterEmail: string; locationId: number; preferred: boolean }) =>
+  axios.post<{ success: boolean }>(`/api/projects/share/locations/${token}/preference`, body).then((r) => r.data);
 
 // Activations (nested under projects)
 export const createActivation = (projectId: number, data: Partial<Activation>) =>
@@ -623,12 +635,18 @@ export const triggerAutoBackup = () =>
   api.post<{ success: boolean; filename: string }>('/backup/auto').then((r) => r.data);
 
 // Email settings
+export type EmailMethod = 'smtp' | 'graph';
+
 export interface EmailSettings {
   configured: boolean;
+  method: EmailMethod;
   smtpHost: string;
   smtpPort: number;
   smtpUser: string;
   smtpPass: string;
+  graphTenantId: string;
+  graphClientId: string;
+  graphClientSecret: string;
   fromEmail: string;
   fromName: string;
 }
@@ -637,12 +655,17 @@ export const fetchEmailSettings = () =>
   api.get<EmailSettings>('/settings/email').then((r) => r.data);
 
 export const updateEmailSettings = (data: {
+  method: EmailMethod;
   smtpHost: string; smtpPort: number; smtpUser: string; smtpPass: string;
+  graphTenantId: string; graphClientId: string; graphClientSecret: string;
   fromEmail: string; fromName: string;
 }) => api.put<{ success: boolean }>('/settings/email', data).then((r) => r.data);
 
 export const sendTestEmail = (testEmail: string) =>
   api.post<{ success: boolean }>('/settings/email/test', { testEmail }).then((r) => r.data);
+
+export const testEmailConnection = () =>
+  api.post<{ success: boolean }>('/settings/email/test-connection').then((r) => r.data);
 
 export const shareViaEmail = (data: { to: string; subject?: string; pdfBase64: string; fileName?: string }) =>
   api.post<{ success: boolean }>('/share-email', data).then((r) => r.data);

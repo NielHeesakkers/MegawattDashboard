@@ -240,6 +240,7 @@ export default function Sidebar({ viewMode, onViewMode, hasTab, isAdmin, usernam
           </svg>
           Uitloggen
         </button>
+        <p className="text-text-muted/60 text-[10px] text-center mt-1.5">v{__APP_VERSION__}</p>
       </div>
     </>
   );

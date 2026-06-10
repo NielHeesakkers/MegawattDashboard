@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { fetchSharedLocations, verifySharedLocations, SharedLocationsResponse, SharedLocation } from '../api';
+import { fetchSharedLocations, verifySharedLocations, fetchMySharedPreferences, setSharedPreference, SharedLocationsResponse, SharedLocation } from '../api';
 import LocatieMap from './locatie/LocatieMap';
 
 const MegawattLogo = () => (
@@ -13,35 +13,81 @@ const OMGEVING_LABELS: Record<string, string> = {
   centrum: 'Centrum', winkelstraat: 'Winkelstraat', park: 'Park', plein: 'Plein', stationsplein: 'Stationsplein',
 };
 
-function LocationCard({ loc }: { loc: SharedLocation }) {
-  const main = loc.photos.find((p) => p.isMain) ?? loc.photos[0];
-  const photoUrl = main ? `/uploads/Locaties/${loc.id}/${encodeURIComponent(main.filename)}` : null;
-  const chips = [loc.stad, OMGEVING_LABELS[loc.omgevingType], loc.m2 != null ? `${loc.m2} m²` : null].filter(Boolean) as string[];
+function LocationCard({ loc, preferred, onToggle }: { loc: SharedLocation; preferred: boolean; onToggle: (preferred: boolean) => void }) {
+  const photos = loc.photos;
+  const [idx, setIdx] = useState(0);
+  const current = photos[idx];
+  const photoUrl = current ? `/uploads/Locaties/${loc.id}/${encodeURIComponent(current.filename)}` : null;
+  const chips = [loc.m2 != null ? `${loc.m2} m²` : null, OMGEVING_LABELS[loc.omgevingType], loc.stad].filter(Boolean) as string[];
   return (
-    <div className="bg-bg-surface rounded-[14px] border border-[rgba(255,255,255,0.08)] overflow-hidden flex flex-col">
-      {photoUrl && (
-        <div className="aspect-[16/10] bg-black/30">
-          <img src={photoUrl} alt={loc.naam} loading="lazy" className="w-full h-full object-cover" />
+    <div className="bg-bg-surface rounded-[14px] border border-[rgba(255,255,255,0.08)] overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_2fr]">
+      {/* Links: fotokader + gegevens */}
+      <div className="p-4 flex flex-col gap-3">
+        {/* Foto, of een leeg kader als er geen foto is */}
+        <div className="relative aspect-[4/3] rounded-[10px] bg-black/30 border border-[rgba(255,255,255,0.06)] overflow-hidden flex items-center justify-center">
+          {photoUrl ? (
+            <img src={photoUrl} alt={loc.naam} loading="lazy" className="w-full h-full object-cover" />
+          ) : (
+            <svg className="w-8 h-8 text-white/15" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 19.5h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Z" />
+            </svg>
+          )}
+          {photos.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setIdx((i) => (i - 1 + photos.length) % photos.length)}
+                aria-label="Vorige foto"
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIdx((i) => (i + 1) % photos.length)}
+                aria-label="Volgende foto"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+              </button>
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-black/55 text-white text-[11px] font-medium">{idx + 1} / {photos.length}</div>
+            </>
+          )}
         </div>
-      )}
-      <div className="p-4 flex flex-col gap-1.5">
-        <div className="flex items-baseline gap-2">
-          {loc.code && <span className="font-mono text-[11px] text-accent-teal shrink-0">{loc.code}</span>}
-          <h3 className="text-white font-semibold text-[15px] leading-tight">{loc.naam}</h3>
-        </div>
-        <p className="text-text-secondary text-[13px]">{loc.adres}</p>
-        {chips.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {chips.map((c) => (
-              <span key={c} className="px-2 py-0.5 rounded-full bg-white/5 text-white/70 text-[11px]">{c}</span>
-            ))}
+        <div>
+          <div className="flex items-baseline gap-2 mb-1">
+            {loc.code && <span className="font-mono text-[11px] text-accent-teal shrink-0">{loc.code}</span>}
+            <h3 className="text-white font-semibold text-[15px] leading-tight">{loc.naam}</h3>
           </div>
-        )}
-      </div>
-      {loc.lat != null && loc.lng != null && (
-        <div className="mt-auto">
-          <LocatieMap lat={loc.lat} lng={loc.lng} address={loc.adres} heightClass="h-[180px]" />
+          <p className="text-text-secondary text-[13px]">{loc.adres}</p>
+          {chips.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {chips.map((c) => (
+                <span key={c} className="px-2 py-0.5 rounded-full bg-white/5 text-white/70 text-[11px]">{c}</span>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => onToggle(!preferred)}
+            className={`mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-[8px] text-sm font-medium cursor-pointer transition-colors ${
+              preferred ? 'bg-accent-teal text-[#1a3a38]' : 'bg-white/5 text-text-secondary hover:bg-white/10'
+            }`}
+          >
+            <span className={`w-4 h-4 rounded border flex items-center justify-center ${preferred ? 'bg-[#1a3a38] border-[#1a3a38]' : 'border-white/30'}`}>
+              {preferred && (
+                <svg className="w-3 h-3 text-accent-teal" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+              )}
+            </span>
+            {preferred ? 'Mijn voorkeur' : 'Markeer als voorkeur'}
+          </button>
         </div>
+      </div>
+      {/* Rechts: kaart, vult de hoogte */}
+      {loc.lat != null && loc.lng != null ? (
+        <LocatieMap lat={loc.lat} lng={loc.lng} address={loc.adres} heightClass="h-full min-h-[240px]" />
+      ) : (
+        <div className="min-h-[240px] bg-black/20 flex items-center justify-center text-white/20 text-xs">Geen kaartlocatie</div>
       )}
     </div>
   );
@@ -55,6 +101,14 @@ export default function SharedLocationsPage() {
   const [password, setPassword] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [pwError, setPwError] = useState(false);
+  const [voter, setVoter] = useState<{ name: string; email: string } | null>(() => {
+    if (!token) return null;
+    try { const s = localStorage.getItem(`mw-share-voter-${token}`); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
+  const [prefIds, setPrefIds] = useState<Set<number>>(new Set());
+  const [gateName, setGateName] = useState('');
+  const [gateEmail, setGateEmail] = useState('');
+  const [gateError, setGateError] = useState('');
 
   useEffect(() => {
     if (!token) return;
@@ -64,18 +118,50 @@ export default function SharedLocationsPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  const submitPassword = async (e: FormEvent) => {
+  useEffect(() => {
+    if (!token || !voter) return;
+    fetchMySharedPreferences(token, voter.email).then((r) => setPrefIds(new Set(r.locationIds))).catch(() => {});
+  }, [token, voter]);
+
+  const submitGate = async (e: FormEvent) => {
     e.preventDefault();
-    if (!token) return;
-    setVerifying(true);
-    setPwError(false);
-    try {
-      const r = await verifySharedLocations(token, password);
-      setData(r);
-    } catch {
-      setPwError(true);
-    } finally {
+    if (!token || !data) return;
+    const name = gateName.trim();
+    const email = gateEmail.trim();
+    // Naam + e-mail valideren als die nog ontbreken (nieuwe bezoeker).
+    if (!voter && (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+      setGateError('Vul je naam en een geldig e-mailadres in');
+      return;
+    }
+    setGateError('');
+    // Wachtwoord verifiëren als de link er een heeft.
+    if (data.requiresPassword) {
+      setVerifying(true);
+      setPwError(false);
+      try {
+        const r = await verifySharedLocations(token, password);
+        setData(r);
+      } catch {
+        setPwError(true);
+        setVerifying(false);
+        return;
+      }
       setVerifying(false);
+    }
+    if (!voter) {
+      const v = { name, email };
+      try { localStorage.setItem(`mw-share-voter-${token}`, JSON.stringify(v)); } catch { /* localStorage niet beschikbaar */ }
+      setVoter(v);
+    }
+  };
+
+  const togglePreference = async (locationId: number, preferred: boolean) => {
+    if (!token || !voter) return;
+    setPrefIds((prev) => { const n = new Set(prev); if (preferred) n.add(locationId); else n.delete(locationId); return n; });
+    try {
+      await setSharedPreference(token, { voterName: voter.name, voterEmail: voter.email, locationId, preferred });
+    } catch {
+      setPrefIds((prev) => { const n = new Set(prev); if (preferred) n.delete(locationId); else n.add(locationId); return n; });
     }
   };
 
@@ -101,34 +187,43 @@ export default function SharedLocationsPage() {
         <MegawattLogo />
         <div className="border-l border-[rgba(255,255,255,0.12)] pl-4">
           <p className="text-text-muted text-[11px] uppercase tracking-wider">Locatie-overzicht</p>
-          <h1 className="text-white text-lg font-semibold leading-tight">{data.projectName}</h1>
-          {data.klantName && <p className="text-text-secondary text-[13px]">{data.klantName}</p>}
+          <h1 className="text-white text-lg font-bold leading-tight">
+            {[data.projectNumber, data.klantName, data.projectName].filter((v, i, arr) => !!v && arr.indexOf(v) === i).join(' · ')}
+          </h1>
         </div>
       </div>
     </header>
   );
 
-  if (data.requiresPassword) {
+  if (!voter || data.requiresPassword) {
+    const needsIdentity = !voter;
+    const inputCls = 'w-full mb-2 px-3 py-2 rounded-[8px] bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.12)] text-white text-[14px] placeholder-[rgba(255,255,255,0.3)] focus:outline-none focus:border-accent-teal';
     return (
       <div className="min-h-screen bg-bg-main">
         {header}
         <main className="max-w-md mx-auto px-6 py-16">
-          <form onSubmit={submitPassword} className="bg-bg-surface rounded-[14px] border border-[rgba(255,255,255,0.08)] p-6">
-            <h2 className="text-white font-semibold mb-1">Beveiligd overzicht</h2>
-            <p className="text-text-secondary text-sm mb-4">Voer het wachtwoord in om de locaties te bekijken.</p>
-            <input
-              type="password"
-              autoFocus
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Wachtwoord"
-              className="w-full px-3 py-2 rounded-[8px] bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.12)] text-white text-[14px] placeholder-[rgba(255,255,255,0.3)] focus:outline-none focus:border-accent-teal"
-            />
-            {pwError && <p className="text-red-400 text-[13px] mt-2">Onjuist wachtwoord.</p>}
+          <form onSubmit={submitGate} className="bg-bg-surface rounded-[14px] border border-[rgba(255,255,255,0.08)] p-6">
+            <h2 className="text-white font-semibold mb-1">Bekijk de locaties</h2>
+            <p className="text-text-secondary text-sm mb-4">
+              {needsIdentity
+                ? 'Vul je gegevens in om de locaties te bekijken en je voorkeur door te geven.'
+                : 'Voer het wachtwoord in om de locaties te bekijken.'}
+            </p>
+            {needsIdentity && (
+              <>
+                <input type="text" autoFocus value={gateName} onChange={(e) => setGateName(e.target.value)} placeholder="Naam" className={inputCls} />
+                <input type="email" value={gateEmail} onChange={(e) => setGateEmail(e.target.value)} placeholder="E-mail" className={inputCls} />
+              </>
+            )}
+            {data.requiresPassword && (
+              <input type="password" autoFocus={!needsIdentity} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Wachtwoord" className={inputCls} />
+            )}
+            {gateError && <p className="text-red-400 text-[13px] mt-1">{gateError}</p>}
+            {pwError && <p className="text-red-400 text-[13px] mt-1">Onjuist wachtwoord.</p>}
             <button
               type="submit"
-              disabled={verifying || !password}
-              className="mt-4 w-full px-3 py-2 rounded-[8px] bg-[#ffff00] text-[#1a3a38] text-sm font-semibold hover:brightness-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={verifying}
+              className="mt-3 w-full px-3 py-2 rounded-[8px] bg-[#ffff00] text-[#1a3a38] text-sm font-semibold hover:brightness-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {verifying ? 'Bezig…' : 'Bekijk locaties'}
             </button>
@@ -146,8 +241,8 @@ export default function SharedLocationsPage() {
         {locations.length === 0 ? (
           <p className="text-text-muted">Nog geen locaties gekoppeld aan dit project.</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {locations.map((loc) => <LocationCard key={loc.id} loc={loc} />)}
+          <div className="flex flex-col gap-5">
+            {locations.map((loc) => <LocationCard key={loc.id} loc={loc} preferred={prefIds.has(loc.id)} onToggle={(p) => togglePreference(loc.id, p)} />)}
           </div>
         )}
       </main>

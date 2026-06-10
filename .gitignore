@@ -3,6 +3,7 @@ dist/
 .env
 prisma/dev.db
 prisma/dev.db-journal
+prisma/dev.db.backup
 uploads/*
 !uploads/.gitkeep
 Backup/

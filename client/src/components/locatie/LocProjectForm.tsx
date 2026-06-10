@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Project, ProjectLocation, ProjectWriteInput, ProjectStatus,
-  Klant, Location, AvailabilityState, Toeleverancier, Specialisme, Supercharger,
-  fetchProject, createProject, updateProject, updateProjectShare, deleteProject,
+  Klant, Location, AvailabilityState, Toeleverancier, Specialisme, Supercharger, ProjectPreferences,
+  fetchProject, createProject, updateProject, updateProjectShare, deleteProject, fetchProjectPreferences,
   fetchKlanten, fetchLocations, fetchLocation, fetchToeleveranciers, fetchSpecialismes, fetchSuperchargers,
 } from '../../api';
 import { formatPhone } from '../../shared/phone';
@@ -159,6 +159,7 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
   const [sharePasswordInput, setSharePasswordInput] = useState('');
   const [shareBusy, setShareBusy] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [preferences, setPreferences] = useState<ProjectPreferences>({});
   const dragFromRef = useRef<number | null>(null);
 
   // Initial load: klanten, locations, project (if editing)
@@ -188,6 +189,11 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
         } finally { setLoading(false); }
       }
     })();
+  }, [projectId]);
+
+  useEffect(() => {
+    if (typeof projectId !== 'number') return;
+    fetchProjectPreferences(projectId).then(setPreferences).catch(() => {});
   }, [projectId]);
 
   // ── Deelbare locatie-link ──────────────────────────────────────────────────
@@ -646,6 +652,7 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
           locations={locations}
           superchargers={allSuperchargers}
           projectId={projectId}
+          voters={active.locationId != null ? (preferences[active.locationId] ?? []) : []}
           onPatch={(patch) => updateTab(activeTabIdx, patch)}
           onSelectSuggestion={(loc) => selectLocationSuggestion(activeTabIdx, loc)}
           onCodeChange={(code) => onLocationCodeChange(activeTabIdx, code)}
@@ -658,9 +665,9 @@ export default function LocProjectForm({ projectId, onCreated, onDeleted, onOpen
         </div>
       </div>
 
-      {/* Activaties + Senior-evaluatie — komt uit admin/ProjectForm via showOnlyActivations prop */}
-      {typeof projectId === 'number' && (
-        <ProjectForm projectId={projectId} showOnlyActivations />
+      {/* Activaties + Senior-evaluatie — tijdelijk verborgen; haal `false &&` weg om weer te tonen */}
+      {false && typeof projectId === 'number' && (
+        <ProjectForm projectId={projectId as number} showOnlyActivations />
       )}
 
       {/* Notities */}
@@ -697,13 +704,14 @@ interface LocTabPanelProps {
   locations: Location[];
   superchargers: Supercharger[];
   projectId: number | 'new';
+  voters: Array<{ name: string; email: string }>;
   onPatch: (patch: Partial<TabData>) => void;
   onSelectSuggestion: (loc: Location) => void;
   onCodeChange: (code: string) => void;
   onOpenLocation: (id: number) => void;
 }
 
-function LocTabPanel({ tab, locations, superchargers, projectId, onPatch, onSelectSuggestion, onCodeChange, onOpenLocation }: LocTabPanelProps) {
+function LocTabPanel({ tab, locations, superchargers, projectId, voters, onPatch, onSelectSuggestion, onCodeChange, onOpenLocation }: LocTabPanelProps) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestions = useMemo(() => {
     const q = tab.locationCodeInput.trim().toUpperCase();
@@ -785,6 +793,12 @@ function LocTabPanel({ tab, locations, superchargers, projectId, onPatch, onSele
               {tab.locationData.geschiktActivatie && <span>• Activatie</span>}
               {tab.locationData.geschiktSampling && <span>• Sampling</span>}
             </div>
+            {voters.length > 0 && (
+              <p className="text-[13px] mt-2">
+                <span className="text-accent-teal font-medium">★ Voorkeur: {voters.length}</span>
+                <span className="text-[rgba(255,255,255,0.55)]"> — {voters.map((v) => v.name).join(', ')}</span>
+              </p>
+            )}
           </div>
 
           <LocatieMap
@@ -875,7 +889,8 @@ function LocTabPanel({ tab, locations, superchargers, projectId, onPatch, onSele
         </div>
       )}
 
-      {/* Superchargers — per locatie team + beschikbaarheid per dag */}
+      {/* Superchargers — tijdelijk verborgen; haal `false &&` weg om weer te tonen */}
+      {false && (
       <div className="mb-4">
         {!tab.superchargersOpen ? (
           <button
@@ -893,6 +908,7 @@ function LocTabPanel({ tab, locations, superchargers, projectId, onPatch, onSele
           />
         )}
       </div>
+      )}
 
       {/* Opmerkingen */}
       <div>
