@@ -6,7 +6,7 @@ import Modal from '../ui/Modal';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import { EUROPESE_LANDEN_PRIO, EUROPESE_LANDEN_REST, landToFlag } from '../../shared/countries';
-import { fetchSpecialismes, Specialisme, fetchProjects, Project } from '../../api';
+import { fetchSpecialismes, createSpecialisme, Specialisme, fetchProjects, Project } from '../../api';
 import { formatPhone } from '../../shared/phone';
 import { useAutoSave, SaveIndicator } from '../../hooks/useAutoSave';
 
@@ -78,6 +78,8 @@ export default function ContactenManager<T extends ContactEntity>({
   const [contacts, setContacts] = useState<ContactRow[]>([emptyContact()]);
   const [selectedSpecialismeIds, setSelectedSpecialismeIds] = useState<number[]>([]);
   const [allSpecialismes, setAllSpecialismes] = useState<Specialisme[]>([]);
+  const [addingSpec, setAddingSpec] = useState(false);
+  const [newSpecNaam, setNewSpecNaam] = useState('');
   const [klantProjects, setKlantProjects] = useState<Project[]>([]);
   const [projectLimits, setProjectLimits] = useState<Record<'active' | 'completed' | 'cancelled', ProjectLimit>>({
     active: 10, completed: 10, cancelled: 10,
@@ -99,6 +101,57 @@ export default function ContactenManager<T extends ContactEntity>({
   const load = async () => setItems(await fetchAll());
   useEffect(() => { load(); }, []);
   useEffect(() => { if (showSpecialismes) fetchSpecialismes().then(setAllSpecialismes); }, [showSpecialismes]);
+
+  // Nieuw specialisme inline aanmaken → toevoegen aan de lijst + meteen selecteren.
+  async function handleAddSpecialisme() {
+    const naam = newSpecNaam.trim();
+    setAddingSpec(false);
+    setNewSpecNaam('');
+    if (!naam) return;
+    const existing = allSpecialismes.find((s) => s.naam.toLowerCase() === naam.toLowerCase());
+    if (existing) {
+      setSelectedSpecialismeIds((prev) => (prev.includes(existing.id) ? prev : [...prev, existing.id]));
+      return;
+    }
+    try {
+      const created = await createSpecialisme(naam);
+      setAllSpecialismes((prev) => [...prev, created].sort((a, b) => a.naam.localeCompare(b.naam)));
+      setSelectedSpecialismeIds((prev) => [...prev, created.id]);
+      toast.success(`Specialisme "${created.naam}" toegevoegd`);
+    } catch {
+      toast.error('Kon specialisme niet aanmaken');
+    }
+  }
+
+  // "+ specialisme"-affordance (chip die in een invoerveld verandert), voor beide weergaven.
+  function specialismeAdder(variant: 'form' | 'detail') {
+    const chip = variant === 'form' ? 'px-3 py-1.5 rounded-full text-sm' : 'px-3 h-8 rounded-full text-[13px]';
+    if (addingSpec) {
+      return (
+        <input
+          autoFocus
+          value={newSpecNaam}
+          onChange={(e) => setNewSpecNaam(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); handleAddSpecialisme(); }
+            if (e.key === 'Escape') { setAddingSpec(false); setNewSpecNaam(''); }
+          }}
+          onBlur={() => { setAddingSpec(false); setNewSpecNaam(''); }}
+          placeholder="Nieuw specialisme…"
+          className={`${chip} w-44 bg-white/5 ring-1 ring-accent-teal text-white placeholder-white/30 focus:outline-none`}
+        />
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => setAddingSpec(true)}
+        className={`${chip} border border-dashed border-white/25 text-white/50 hover:text-white hover:border-white/50 transition-colors cursor-pointer`}
+      >
+        + specialisme
+      </button>
+    );
+  }
 
   // Projecten van deze klant of toeleverancier ophalen
   const detailEditId = urlMode ? urlEditId : editingId;
@@ -350,22 +403,20 @@ export default function ContactenManager<T extends ContactEntity>({
       {showSpecialismes && (
         <div>
           <label className="block text-text-secondary text-sm mb-2">Specialismes</label>
-          {allSpecialismes.length === 0
-            ? <p className="text-sm text-white/30 italic">Geen specialismes beschikbaar.</p>
-            : <div className="flex flex-wrap gap-2">
-                {allSpecialismes.map((s) => {
-                  const active = selectedSpecialismeIds.includes(s.id);
-                  return (
-                    <button key={s.id} type="button"
-                      onClick={() => setSelectedSpecialismeIds(active ? selectedSpecialismeIds.filter(id => id !== s.id) : [...selectedSpecialismeIds, s.id])}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer ${active ? 'bg-accent-teal text-[#1a3a38]' : 'bg-white/5 ring-1 ring-white/15 text-white/50 hover:text-white hover:bg-white/10'}`}
-                    >
-                      {active && <span className="mr-1">✓</span>}{s.naam}
-                    </button>
-                  );
-                })}
-              </div>
-          }
+          <div className="flex flex-wrap gap-2">
+            {allSpecialismes.map((s) => {
+              const active = selectedSpecialismeIds.includes(s.id);
+              return (
+                <button key={s.id} type="button"
+                  onClick={() => setSelectedSpecialismeIds(active ? selectedSpecialismeIds.filter(id => id !== s.id) : [...selectedSpecialismeIds, s.id])}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer ${active ? 'bg-accent-teal text-[#1a3a38]' : 'bg-white/5 ring-1 ring-white/15 text-white/50 hover:text-white hover:bg-white/10'}`}
+                >
+                  {active && <span className="mr-1">✓</span>}{s.naam}
+                </button>
+              );
+            })}
+            {specialismeAdder('form')}
+          </div>
         </div>
       )}
       <div className="flex justify-end items-center gap-3 pt-2">
@@ -500,23 +551,20 @@ export default function ContactenManager<T extends ContactEntity>({
           {showSpecialismes && (
             <div className={`${sectionCls} mb-5`}>
               <h2 className={sectionTitleCls}>Specialismes</h2>
-              {allSpecialismes.length === 0 ? (
-                <p className="text-sm text-white/30 italic">Geen specialismes beschikbaar.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {allSpecialismes.map((s) => {
-                    const active = selectedSpecialismeIds.includes(s.id);
-                    return (
-                      <button key={s.id} type="button"
-                        onClick={() => setSelectedSpecialismeIds(active ? selectedSpecialismeIds.filter(id => id !== s.id) : [...selectedSpecialismeIds, s.id])}
-                        className={`px-3 h-8 rounded-full text-[13px] font-medium transition-colors cursor-pointer ${active ? 'bg-accent-teal text-[#1a3a38]' : 'bg-[rgba(255,255,255,0.05)] ring-1 ring-[rgba(255,255,255,0.12)] text-[rgba(255,255,255,0.55)] hover:text-white hover:bg-[rgba(255,255,255,0.1)]'}`}
-                      >
-                        {active && <span className="mr-1">✓</span>}{s.naam}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {allSpecialismes.map((s) => {
+                  const active = selectedSpecialismeIds.includes(s.id);
+                  return (
+                    <button key={s.id} type="button"
+                      onClick={() => setSelectedSpecialismeIds(active ? selectedSpecialismeIds.filter(id => id !== s.id) : [...selectedSpecialismeIds, s.id])}
+                      className={`px-3 h-8 rounded-full text-[13px] font-medium transition-colors cursor-pointer ${active ? 'bg-accent-teal text-[#1a3a38]' : 'bg-[rgba(255,255,255,0.05)] ring-1 ring-[rgba(255,255,255,0.12)] text-[rgba(255,255,255,0.55)] hover:text-white hover:bg-[rgba(255,255,255,0.1)]'}`}
+                    >
+                      {active && <span className="mr-1">✓</span>}{s.naam}
+                    </button>
+                  );
+                })}
+                {specialismeAdder('detail')}
+              </div>
             </div>
           )}
 

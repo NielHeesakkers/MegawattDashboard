@@ -74,7 +74,8 @@ function projectShareSlug(projectNumber: string, klantName: string, name: string
 // Alleen-lezen locatie-overzicht voor de publieke deel-pagina (geen interne velden).
 async function buildSharedLocations(projectId: number) {
   const rows = await prisma.projectLocation.findMany({
-    where: { projectId, available: 'yes' },
+    // Altijd zichtbaar in de deel-link, behalve locaties met status "nee".
+    where: { projectId, available: { not: 'no' } },
     orderBy: { order: 'asc' },
     include: { location: { include: { photos: { orderBy: { order: 'asc' } } } } },
   });
