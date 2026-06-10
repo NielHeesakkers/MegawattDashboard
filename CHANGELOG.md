@@ -5,6 +5,9 @@ Vanaf 1.6.0 per release `+0.0.1` omhoog.
 
 ## [Unreleased]
 
+### Gewijzigd
+- **Backups zijn nu volledig én blijven bestaan tussen versies.** Een backup is voortaan een consistente snapshot van de héle SQLite-database (alle tabellen, incl. toeleveranciers, superchargers, e-mailinstellingen, project-locatie-koppelingen) + alle uploads — niet langer een handmatige selectie tabellen. Backups worden geschreven naast de database in het persistente data-volume, zodat ze een deploy overleven (voorheen verdwenen ze bij elke nieuwe versie). Restore vervangt de database en herstart de server; oude (JSON-)backups blijven herstelbaar.
+
 ### Toegevoegd
 - **Locatieveld in projectformulier** toont bij focus direct de volledige locatielijst (gesorteerd op code); typen filtert.
 

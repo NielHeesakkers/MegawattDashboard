@@ -18,11 +18,54 @@ const PROJECT_ROOT = __dirname.includes(path.join('dist', 'server'))
   : path.resolve(__dirname, '../..');
 
 const uploadsDir = path.resolve(PROJECT_ROOT, 'uploads');
-const backupDir = path.resolve(PROJECT_ROOT, 'Backup');
 
-// Ensure Backup directory exists
+// Pad naar de actieve SQLite-database. Prisma lost relatieve file:-paden op t.o.v. de prisma/-map.
+function resolveDbPath(): string {
+  let p = (process.env.DATABASE_URL || '').replace(/^file:/, '');
+  if (!path.isAbsolute(p)) p = path.resolve(PROJECT_ROOT, 'prisma', p);
+  return p;
+}
+const dbPath = resolveDbPath();
+
+// Backups in dezelfde (persistente) map als de database → overleven elke deploy.
+const backupDir = path.join(path.dirname(dbPath), 'Backup');
 if (!fs.existsSync(backupDir)) {
   fs.mkdirSync(backupDir, { recursive: true });
+}
+
+let snapCounter = 0;
+// Voegt een consistente snapshot van de hele database + alle uploads toe aan het archief.
+// Retourneert het tijdelijke snapshot-pad (door de aanroeper op te ruimen na finalize()).
+async function buildBackupArchive(archive: ReturnType<typeof archiver>): Promise<string> {
+  const tmpSnap = path.join(os.tmpdir(), `mw-db-snapshot-${Date.now()}-${snapCounter++}.db`);
+  await prisma.$executeRawUnsafe(`VACUUM INTO '${tmpSnap.replace(/'/g, "''")}'`);
+  archive.file(tmpSnap, { name: 'database.db' });
+  if (fs.existsSync(uploadsDir)) archive.directory(uploadsDir, 'uploads');
+  return tmpSnap;
+}
+
+// Kopieert een map recursief (gebruikt bij het herstellen van uploads).
+function copyRecursive(src: string, dest: string): void {
+  for (const entry of fs.readdirSync(src)) {
+    const srcPath = path.join(src, entry);
+    const destPath = path.join(dest, entry);
+    if (fs.statSync(srcPath).isDirectory()) {
+      fs.mkdirSync(destPath, { recursive: true });
+      copyRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+function backupFilename(withTime = false): string {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  if (!withTime) return `megawatt-backup-${dd}-${mm}-${yyyy}.zip`;
+  const hhmm = d.toTimeString().slice(0, 5).replace(':', '');
+  return `megawatt-backup-${dd}-${mm}-${yyyy}_${hhmm}.zip`;
 }
 
 const importUpload = multer({
@@ -56,69 +99,27 @@ interface BackupData {
   locationCosts?: any[];
 }
 
-// Export: download ZIP with data.json + uploads/
+// Export: download ZIP met volledige database-snapshot + uploads/
 router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) => {
+  let tmpSnap: string | null = null;
   try {
-    const [executives, teams, members, clientTeams, clientTeamMembers, clients, users, klanten, projects, activations, locations, locationContacts, locationPhotos, locationCosts] = await Promise.all([
-      prisma.executive.findMany({ orderBy: { level: 'asc' } }),
-      prisma.team.findMany({ orderBy: { order: 'asc' } }),
-      prisma.member.findMany({ orderBy: [{ teamId: 'asc' }, { order: 'asc' }] }),
-      prisma.clientTeam.findMany({ orderBy: { order: 'asc' } }),
-      prisma.clientTeamMember.findMany({ orderBy: { order: 'asc' } }),
-      prisma.client.findMany({ orderBy: [{ clientTeamId: 'asc' }, { order: 'asc' }] }),
-      prisma.user.findMany({ orderBy: { username: 'asc' } }),
-      prisma.klant.findMany({ orderBy: { name: 'asc' } }),
-      prisma.project.findMany({ orderBy: { id: 'asc' } }),
-      prisma.activation.findMany({ orderBy: { id: 'asc' } }),
-      prisma.location.findMany({ orderBy: { id: 'asc' } }),
-      prisma.locationContact.findMany({ orderBy: { id: 'asc' } }),
-      prisma.locationPhoto.findMany({ orderBy: { id: 'asc' } }),
-      prisma.locationCost.findMany({ orderBy: { id: 'asc' } }),
-    ]);
-
-    const backupData: BackupData = {
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      executives,
-      teams,
-      members,
-      clientTeams,
-      clientTeamMembers,
-      clients,
-      users,
-      klanten,
-      projects,
-      activations,
-      locations,
-      locationContacts,
-      locationPhotos,
-      locationCosts,
-    };
-
     const archive = archiver('zip', { zlib: { level: 9 } });
     archive.on('error', () => {
       if (!res.headersSent) res.status(500).json({ error: 'Export failed' });
     });
 
     res.setHeader('Content-Type', 'application/zip');
-    const now = new Date();
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const yyyy = now.getFullYear();
-    res.setHeader('Content-Disposition', `attachment; filename="megawatt-backup-${dd}-${mm}-${yyyy}.zip"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${backupFilename()}"`);
 
     archive.pipe(res);
-    archive.append(JSON.stringify(backupData, null, 2), { name: 'data.json' });
-
-    if (fs.existsSync(uploadsDir)) {
-      archive.directory(uploadsDir, 'uploads');
-    }
-
+    tmpSnap = await buildBackupArchive(archive);
     await archive.finalize();
-    await logAudit('CREATE', 'Backup', 0, { action: 'export', executives: executives.length, teams: teams.length, members: members.length }, req.adminUsername);
+    await logAudit('CREATE', 'Backup', 0, { action: 'export' }, req.adminUsername);
   } catch (err) {
     console.error('Export failed:', err);
     if (!res.headersSent) res.status(500).json({ error: 'Export failed' });
+  } finally {
+    if (tmpSnap) fs.promises.unlink(tmpSnap).catch(() => {});
   }
 });
 
@@ -135,9 +136,52 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
     fs.mkdirSync(tmpDir, { recursive: true });
     await extractZip(tmpZip, { dir: tmpDir });
 
-    // Validate data.json
+    // Nieuw formaat: volledige database-snapshot. Vervang DB + uploads en herstart.
+    const dbInZip = path.join(tmpDir, 'database.db');
+    if (fs.existsSync(dbInZip)) {
+      const headBuf = Buffer.alloc(16);
+      const fd = fs.openSync(dbInZip, 'r');
+      try { fs.readSync(fd, headBuf, 0, 16, 0); } finally { fs.closeSync(fd); }
+      if (!headBuf.toString('utf8').startsWith('SQLite format 3')) {
+        res.status(400).json({ error: 'Ongeldige database in backup' });
+        return;
+      }
+      // Uploads vervangen
+      if (fs.existsSync(uploadsDir)) {
+        for (const file of fs.readdirSync(uploadsDir)) {
+          fs.rmSync(path.join(uploadsDir, file), { recursive: true, force: true });
+        }
+      } else {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      const extractedUploads = path.join(tmpDir, 'uploads');
+      if (fs.existsSync(extractedUploads)) copyRecursive(extractedUploads, uploadsDir);
+
+      // Database stagen; daadwerkelijke swap + herstart ná de response.
+      const staged = `${dbPath}.restore`;
+      fs.copyFileSync(dbInZip, staged);
+      await logAudit('UPDATE', 'Backup', 0, { action: 'restore-database' }, req.adminUsername);
+      res.json({ success: true, restored: 'database', restart: true });
+
+      setTimeout(async () => {
+        try {
+          await prisma.$disconnect();
+          for (const suffix of ['-wal', '-shm', '']) {
+            try { fs.unlinkSync(`${dbPath}${suffix}`); } catch { /* bestond niet */ }
+          }
+          fs.renameSync(staged, dbPath);
+          console.log('[Restore] Database vervangen — server herstart.');
+        } catch (e) {
+          console.error('[Restore] Swap mislukt:', e);
+        }
+        process.exit(0);
+      }, 500);
+      return;
+    }
+
+    // Oud formaat: data.json met ID-remapping (backward compatible).
     const dataPath = path.join(tmpDir, 'data.json');
-    if (!fs.existsSync(dataPath)) { res.status(400).json({ error: 'ZIP must contain data.json' }); return; }
+    if (!fs.existsSync(dataPath)) { res.status(400).json({ error: 'ZIP moet database.db of data.json bevatten' }); return; }
 
     const backupData: BackupData = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
     if (!backupData.executives || !backupData.teams || !backupData.members) {
@@ -341,18 +385,6 @@ router.post('/import', authMiddleware, importUpload.single('backup'), async (req
 
     const extractedUploads = path.join(tmpDir, 'uploads');
     if (fs.existsSync(extractedUploads)) {
-      const copyRecursive = (src: string, dest: string) => {
-        for (const entry of fs.readdirSync(src)) {
-          const srcPath = path.join(src, entry);
-          const destPath = path.join(dest, entry);
-          if (fs.statSync(srcPath).isDirectory()) {
-            fs.mkdirSync(destPath, { recursive: true });
-            copyRecursive(srcPath, destPath);
-          } else {
-            fs.copyFileSync(srcPath, destPath);
-          }
-        }
-      };
       copyRecursive(extractedUploads, uploadsDir);
     }
 
@@ -444,49 +476,9 @@ function pruneBackups(): void {
 }
 
 async function createAutoBackup(): Promise<string | null> {
+  let tmpSnap: string | null = null;
   try {
-    const [executives, teams, members, clientTeams, clientTeamMembers, clients, users, klanten, projects, activations, locations, locationContacts, locationPhotos, locationCosts] = await Promise.all([
-      prisma.executive.findMany({ orderBy: { level: 'asc' } }),
-      prisma.team.findMany({ orderBy: { order: 'asc' } }),
-      prisma.member.findMany({ orderBy: [{ teamId: 'asc' }, { order: 'asc' }] }),
-      prisma.clientTeam.findMany({ orderBy: { order: 'asc' } }),
-      prisma.clientTeamMember.findMany({ orderBy: { order: 'asc' } }),
-      prisma.client.findMany({ orderBy: [{ clientTeamId: 'asc' }, { order: 'asc' }] }),
-      prisma.user.findMany({ orderBy: { username: 'asc' } }),
-      prisma.klant.findMany({ orderBy: { name: 'asc' } }),
-      prisma.project.findMany({ orderBy: { id: 'asc' } }),
-      prisma.activation.findMany({ orderBy: { id: 'asc' } }),
-      prisma.location.findMany({ orderBy: { id: 'asc' } }),
-      prisma.locationContact.findMany({ orderBy: { id: 'asc' } }),
-      prisma.locationPhoto.findMany({ orderBy: { id: 'asc' } }),
-      prisma.locationCost.findMany({ orderBy: { id: 'asc' } }),
-    ]);
-
-    const backupData: BackupData = {
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      executives,
-      teams,
-      members,
-      clientTeams,
-      clientTeamMembers,
-      clients,
-      users,
-      klanten,
-      projects,
-      activations,
-      locations,
-      locationContacts,
-      locationPhotos,
-      locationCosts,
-    };
-
-    const date = new Date();
-    const dd = String(date.getDate()).padStart(2, '0');
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const yyyy = date.getFullYear();
-    const hhmm = date.toTimeString().slice(0, 5).replace(':', '');
-    const filename = `megawatt-backup-${dd}-${mm}-${yyyy}_${hhmm}.zip`;
+    const filename = backupFilename(true);
     const outputPath = path.join(backupDir, filename);
 
     await new Promise<void>((resolve, reject) => {
@@ -495,11 +487,9 @@ async function createAutoBackup(): Promise<string | null> {
       output.on('close', resolve);
       archive.on('error', reject);
       archive.pipe(output);
-      archive.append(JSON.stringify(backupData, null, 2), { name: 'data.json' });
-      if (fs.existsSync(uploadsDir)) {
-        archive.directory(uploadsDir, 'uploads');
-      }
-      archive.finalize();
+      buildBackupArchive(archive)
+        .then((snap) => { tmpSnap = snap; return archive.finalize(); })
+        .catch(reject);
     });
 
     pruneBackups();
@@ -509,6 +499,8 @@ async function createAutoBackup(): Promise<string | null> {
   } catch (err) {
     console.error('[Auto Backup] Failed:', err);
     return null;
+  } finally {
+    if (tmpSnap) fs.promises.unlink(tmpSnap).catch(() => {});
   }
 }
 

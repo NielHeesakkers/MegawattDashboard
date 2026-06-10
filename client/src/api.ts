@@ -593,12 +593,16 @@ export const exportBackup = () =>
     a.remove();
   });
 
+export interface ImportBackupResult {
+  success: boolean;
+  restored?: 'database';
+  restart?: boolean;
+  imported?: { executives: number; teams: number; members: number };
+}
 export const importBackup = (file: File) => {
   const fd = new FormData();
   fd.append('backup', file);
-  return api.post<{ success: boolean; imported: { executives: number; teams: number; members: number } }>(
-    '/backup/import', fd
-  ).then((r) => r.data);
+  return api.post<ImportBackupResult>('/backup/import', fd).then((r) => r.data);
 };
 
 export const clearAllData = () =>

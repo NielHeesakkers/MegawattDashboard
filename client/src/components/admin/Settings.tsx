@@ -78,7 +78,13 @@ function DataTab() {
     setImporting(true);
     try {
       const result = await importBackup(pendingImportFile);
-      toast.success(`Import succesvol: ${result.imported.teams} teams, ${result.imported.members} medewerkers, ${result.imported.executives} directieleden`);
+      if (result.restored === 'database') {
+        toast.success('Backup hersteld. De server herstart — herlaad de pagina over ~30 seconden.');
+      } else if (result.imported) {
+        toast.success(`Import succesvol: ${result.imported.teams} teams, ${result.imported.members} medewerkers, ${result.imported.executives} directieleden`);
+      } else {
+        toast.success('Import succesvol');
+      }
     } catch {
       toast.error('Import mislukt. Controleer of het ZIP-bestand geldig is.');
     } finally {
