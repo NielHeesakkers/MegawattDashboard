@@ -328,6 +328,7 @@ export interface Project {
   startDate: string;
   endDate: string;
   status: ProjectStatus;
+  order: number;
   contactPerson: string | null;
   email: string | null;
   needsLocations: boolean;
@@ -517,6 +518,10 @@ export const fetchProject = (id: number) =>
 
 export const fetchProjects = (status?: string) =>
   api.get<Project[]>('/projects', { params: status ? { status } : {} }).then((r) => r.data);
+export const addLocationToProject = (projectId: number, locationId: number) =>
+  api.post<{ added: boolean; already?: boolean }>(`/projects/${projectId}/locations`, { locationId }).then((r) => r.data);
+export const reorderProjects = (orders: Array<{ id: number; order: number }>) =>
+  api.put('/projects/reorder/batch', { orders }).then((r) => r.data);
 export const createProject = (data: ProjectWriteInput | Partial<Project>) =>
   api.post<Project>('/projects', data).then((r) => r.data);
 export const updateProject = (id: number, data: ProjectWriteInput | Partial<Project>) =>

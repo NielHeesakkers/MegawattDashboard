@@ -3,9 +3,12 @@
 Alle noemenswaardige wijzigingen aan het Megawatt Dashboard.
 Vanaf 1.6.0 per release `+0.0.1` omhoog.
 
-## [Unreleased]
+## v1.6.2 — 15 juni 2026
 
-_Nog niets — volgende release wordt 1.6.2._
+### Toegevoegd
+- **Ingebouwde handleiding** — onderin de sidebar staat naast het instellingen-tandwiel (admins) een **?-knop** (iedereen) die de handleiding in het content-deel opent: een tab per menu-onderdeel, gefilterd op de rechten van de gebruiker. Inclusief een stappenplan **Locatie management** (klant → project → locaties → koppelen → klant-link). "Admin panel" is daarbij een compact tandwiel-icoon geworden.
+- **Snel locaties aan een project koppelen via de rechtermuisknop** — klik in de Locaties-lijst met de rechtermuisknop op een locatie → **Toevoegen aan project** → kies een lopend project. De locatie wordt direct gekoppeld (beschikbaarheid start op "Onbekend"); zat 'ie er al in, dan gebeurt er niets dubbels. Projecten worden getoond als `projectnummer_klant_projectomschrijving`, in dezelfde volgorde als de Lopend-lijst.
+- **Projecten slepen om de volgorde aan te passen** — de Lopend-lijst staat in een eigen, handmatige volgorde (nieuwste project standaard bovenaan). Sleep een rij aan het greepje links om 'm te verplaatsen; de andere rijen schuiven mee om ruimte te maken en de volgorde wordt direct opgeslagen. Deze volgorde werkt door in het rechtermuisknop-menu. (Nieuwe `order`-kolom op Project, via migratie.)
 
 ## v1.6.1 — 10 juni 2026
 

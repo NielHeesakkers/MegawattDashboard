@@ -214,6 +214,7 @@ model Project {
   startDate              DateTime
   endDate                DateTime
   status                 String       @default("active")
+  order                  Int          @default(0)
   contactPerson          String?
   email                  String?
   needsLocations         Boolean      @default(false)

@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
-import { fetchLocations, Location } from '../../api';
+import { fetchLocations, Location, fetchProjects, addLocationToProject, Project } from '../../api';
 import { LocatieFilters, EMPTY_FILTERS, applyFilters, bucketOf, M2_BUCKETS } from './LocatieFilterSidebar';
 import { landToFlag } from '../../shared/countries';
+import { useToast } from '../ui/Toast';
 
 interface Props {
   onOpenDetail: (id: number | 'new') => void;
@@ -16,10 +17,36 @@ export default function LocatieListPage({ onOpenDetail }: Props) {
   const [filters, setFilters] = useState<LocatieFilters>(EMPTY_FILTERS);
   const [sortKey, setSortKey] = useState<SortKey>('naam');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [activeProjects, setActiveProjects] = useState<Project[]>([]);
+  const [ctx, setCtx] = useState<{ x: number; y: number; loc: Location } | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     fetchLocations().then(setLocations).finally(() => setLoading(false));
+    // De backend levert lopende projecten al in de handmatige volgorde (zelfde als de Projecten-lijst).
+    fetchProjects('active').then(setActiveProjects).catch(() => {});
   }, []);
+
+  // Sluit het rechtsklik-menu bij klik elders of Escape.
+  useEffect(() => {
+    if (!ctx) return;
+    const close = () => setCtx(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtx(null); };
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('click', close); document.removeEventListener('keydown', onKey); };
+  }, [ctx]);
+
+  const addToProject = async (project: Project, loc: Location) => {
+    setCtx(null);
+    try {
+      const r = await addLocationToProject(project.id, loc.id);
+      if (r.already) toast.success(`"${loc.naam || 'Locatie'}" zat al in ${project.projectNumber}`);
+      else toast.success(`"${loc.naam || 'Locatie'}" toegevoegd aan ${project.projectNumber}`);
+    } catch {
+      toast.error('Toevoegen aan project mislukt');
+    }
+  };
 
   const landen = useMemo(() => [...new Set(locations.map((l) => l.land).filter(Boolean))].sort(), [locations]);
   const filtered = useMemo(() => applyFilters(locations, filters, ''), [locations, filters]);
@@ -140,7 +167,7 @@ export default function LocatieListPage({ onOpenDetail }: Props) {
                 if (loc.geschiktHotspot) chips.push('Hotspot');
                 if (loc.stroom) chips.push('Stroom');
                 return (
-                  <tr key={loc.id} onClick={() => onOpenDetail(loc.id)} className="h-14 border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.04)] cursor-pointer transition-colors align-middle">
+                  <tr key={loc.id} onClick={() => onOpenDetail(loc.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, loc }); }} className="h-14 border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.04)] cursor-pointer transition-colors align-middle">
                     <td className="px-3 py-2">
                       <div className="w-9 h-9 rounded overflow-hidden bg-[rgba(255,255,255,0.05)] shrink-0">
                         {photo ? (
@@ -176,6 +203,34 @@ export default function LocatieListPage({ onOpenDetail }: Props) {
 
       {/* Suppress voor M2_BUCKETS bucket helper niet gebruikt */}
       <div className="hidden">{bucketOf(0)}</div>
+
+      {/* Rechtsklik-menu: locatie aan een lopend project toevoegen */}
+      {ctx && (
+        <div
+          className="fixed z-[200] min-w-[240px] max-w-[300px] bg-bg-surface rounded-xl ring-1 ring-[rgba(255,255,255,0.14)] shadow-2xl overflow-hidden"
+          style={{ top: Math.min(ctx.y, window.innerHeight - 340), left: Math.min(ctx.x, window.innerWidth - 300) }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[rgba(255,255,255,0.4)] border-b border-[rgba(255,255,255,0.08)]">
+            Toevoegen aan project
+          </div>
+          {activeProjects.length === 0 ? (
+            <div className="px-3 py-3 text-[13px] text-[rgba(255,255,255,0.4)]">Geen lopende projecten</div>
+          ) : (
+            <div className="max-h-72 overflow-y-auto py-1">
+              {activeProjects.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => addToProject(p, ctx.loc)}
+                  className="w-full text-left px-3 py-2 hover:bg-[rgba(255,255,255,0.06)] cursor-pointer"
+                >
+                  <div className="text-white text-[13px] truncate">{[p.projectNumber, p.klant?.name, p.name].filter(Boolean).join('_')}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

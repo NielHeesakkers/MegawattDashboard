@@ -18,6 +18,7 @@ import ToeleveranciersManager from '../admin/ToeleveranciersManager';
 import ContactenManager from '../admin/ContactenManager';
 import Sidebar from './Sidebar';
 import ExportMenu from './ExportMenu';
+import HelpView from '../help/HelpView';
 import { ALL_PERMISSION_KEYS } from '../../shared/permissions';
 import { fetchToeleveranciers, createToeleverancier, updateToeleverancier, deleteToeleverancier, refreshToeleverancierLogo, Toeleverancier } from '../../api';
 import ProjectList from '../admin/ProjectList';
@@ -159,6 +160,9 @@ export default function OrganigramPage() {
   const [selectedExec, setSelectedExec] = useState<Executive | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
+  // Handleiding sluit zodra je naar een menu-onderdeel navigeert.
+  useEffect(() => { setShowHelp(false); }, [viewMode]);
   const captureRef = useRef<HTMLDivElement>(null);
   const klantteamsCaptureRef = useRef<HTMLDivElement>(null);
   const branchContainerRef = useRef<HTMLDivElement>(null);
@@ -393,8 +397,13 @@ export default function OrganigramPage() {
         isAdmin={isAdmin}
         username={username}
         onLogout={logout}
+        onOpenHelp={() => setShowHelp(true)}
       />
       <div className="flex-1 min-w-0 h-screen overflow-auto">
+      {showHelp ? (
+        <HelpView hasTab={hasTab} />
+      ) : (
+      <>
       {/* Exporteren — alleen op Organigram + Klantteams, linksboven in het content-deel */}
       {(viewMode === 'dashboard' || viewMode === 'klantteams') && (
         <div className="sticky top-0 z-30 px-6 pt-4 pointer-events-none">
@@ -836,6 +845,8 @@ export default function OrganigramPage() {
           <MemberModal member={selectedMember} onClose={() => setSelectedMember(null)} />
           <ExecutiveModal executive={selectedExec} onClose={() => setSelectedExec(null)} />
         </>
+      )}
+      </>
       )}
 
       <EmailShareModal

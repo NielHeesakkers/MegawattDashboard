@@ -232,7 +232,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   const where = status ? { status } : {};
   const projects = await prisma.project.findMany({
     where,
-    orderBy: { createdAt: 'desc' },
+    // Handmatige volgorde eerst; nieuwste bovenaan als de volgorde gelijk is.
+    orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
     include: {
       klant: { select: { id: true, name: true, logo: true } },
       toeleveranciers: { select: { toeleverancierId: true } },
@@ -240,6 +241,15 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     },
   });
   res.json(projects);
+});
+
+// PUT /api/projects/reorder/batch — sla de handmatige projectvolgorde op.
+router.put('/reorder/batch', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { orders } = req.body as { orders?: Array<{ id: number; order: number }> };
+  if (!Array.isArray(orders)) { res.status(400).json({ error: 'orders is verplicht' }); return; }
+  await prisma.$transaction(orders.map((o) => prisma.project.update({ where: { id: o.id }, data: { order: o.order } })));
+  await logAudit('UPDATE', 'Project', 0, { action: 'reorder', count: orders.length }, req.adminUsername!);
+  res.json({ success: true });
 });
 
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -271,11 +281,15 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   const klantForSlug = await prisma.klant.findUnique({ where: { id: klantId }, select: { name: true } });
   try {
     const result = await prisma.$transaction(async (tx) => {
+      // Nieuw project bovenaan: kleinste order - 1.
+      const minAgg = await tx.project.aggregate({ _min: { order: true } });
+      const newOrder = (minAgg._min.order ?? 0) - 1;
       const project = await tx.project.create({
         data: {
           klantId,
           projectNumber,
           name: name || null,
+          order: newOrder,
           startDate: startDate ? new Date(startDate) : new Date(),
           endDate:   endDate   ? new Date(endDate)   : new Date(),
           contactPerson, email,
@@ -380,6 +394,25 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     if (prismaErr.code === 'P2002') { res.status(400).json({ error: 'Er bestaat al een project met dit projectnummer' }); return; }
     throw err;
   }
+});
+
+// POST /api/projects/:id/locations — koppel één locatie aan een project (snelkoppeling
+// vanuit de locatielijst). Beschikbaarheid start op 'unknown'. Idempotent: al gekoppeld → niets.
+router.post('/:id/locations', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const projectId = Number(req.params.id);
+  const { locationId } = req.body as { locationId?: number };
+  if (!locationId) { res.status(400).json({ error: 'locationId is verplicht' }); return; }
+
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+  if (!project) { res.status(404).json({ error: 'Project niet gevonden' }); return; }
+
+  const existing = await prisma.projectLocation.findFirst({ where: { projectId, locationId } });
+  if (existing) { res.json({ added: false, already: true }); return; }
+
+  const max = await prisma.projectLocation.aggregate({ where: { projectId }, _max: { order: true } });
+  await prisma.projectLocation.create({ data: { projectId, locationId, order: (max._max.order ?? -1) + 1 } });
+  await logAudit('UPDATE', 'Project', projectId, { addedLocation: locationId }, req.adminUsername!);
+  res.status(201).json({ added: true });
 });
 
 // Stel het optionele wachtwoord van de deel-link in of wis het. De link (token) zelf
