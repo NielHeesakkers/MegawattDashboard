@@ -3,6 +3,19 @@
 Alle noemenswaardige wijzigingen aan het Megawatt Dashboard.
 Vanaf 1.6.0 per release `+0.0.1` omhoog.
 
+## v1.6.3 — 18 juni 2026
+
+### Toegevoegd
+- **Vijf nieuwe locatiekenmerken + filters** — stroomvoorziening-type (alleen bij stroom = ja), aanvraagtijd, volume sampling, doelgroepen en event type. In te vullen in het locatieformulier en te filteren in de Locaties-lijst. (Nieuwe kolommen op `Location`, via migratie.)
+- **Nieuwe filterbalk op de Locaties-lijst** — compacte **dropdown-pillen** (één per filter) met een telbadge en een multiselect-popover, in plaats van lange rijen chips. Daaronder een **breadcrumb** met je actieve keuzes als wisbare tags, een resultaatteller en "Wis alles".
+- **"Anders…"-vrije invoer** bij oriëntatie en eigendomstype in het locatieformulier (naast de bestaande optie bij omgevingstype), en bij de meervoudige kenmerken.
+
+### Filtergedrag
+- **Volume sampling** en **aanvraagtijd** filteren als drempel: je kiest een klasse en ziet die **én alles eronder** (bv. "8 weken" toont ook 2 en 4 weken; volume "5.001–10.000" toont ook alles daaronder). De overige kenmerk-filters tonen locaties die op minstens één van je keuzes passen.
+
+### Verholpen
+- **Geen wit scherm meer** bij het filteren op doelgroep/stroom/event: `applyFilters` gaat nu veilig om met locaties zonder die velden.
+
 ## v1.6.2 — 15 juni 2026
 
 ### Toegevoegd

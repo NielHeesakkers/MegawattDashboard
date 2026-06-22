@@ -18,7 +18,7 @@ Vijf nieuwe velden op `Location`. Bestaande locaties blijven geldig (lege defaul
 |---|---|---|---|---|
 | `stroomvoorzieningTypes` | String (JSON-array) | `"[]"` | meervoudig | match-any |
 | `aanvraagtijd` | String | `""` | enkel | drempel ≤ (binnen-X-weken) |
-| `volumeSampling` | String | `""` | enkel | drempel ≥ (klasse en hoger) |
+| `volumeSampling` | String | `""` | enkel | drempel ≤ (klasse en alles eronder) |
 | `doelgroepen` | String (JSON-array) | `"[]"` | meervoudig | match-any |
 | `eventTypes` | String (JSON-array) | `"[]"` | meervoudig | match-any |
 
@@ -82,7 +82,7 @@ Plaatsing: stroomvoorziening bij de sectie **Voorzieningen** (onder de stroom-ch
 ```ts
 stroomvoorziening: string[]; // match-any op stroomvoorzieningTypes
 aanvraagtijd: string[];      // drempel ≤
-volumeSampling: string[];    // drempel ≥
+volumeSampling: string[];    // drempel ≤
 doelgroepen: string[];       // match-any
 eventTypes: string[];        // match-any
 ```
@@ -91,7 +91,7 @@ eventTypes: string[];        // match-any
 
 **`applyFilters`-semantiek:**
 - **match-any** (stroomvoorziening, doelgroepen, eventTypes): locatie matcht als zijn array **minstens één** geselecteerde waarde bevat. Niets geselecteerd → geen filtering. (Zoals het Land-filter.)
-- **drempel ≥** (volumeSampling): geordende klassen met index 0..3. Locatie matcht als zijn klasse-index **≥ de laagste** geselecteerde index. (Meerdere selecties = vanaf de laagste.) Lege waarde op de locatie matcht nooit als er een selectie is.
+- **drempel ≤** (volumeSampling): geordende klassen met index 0..3. Locatie matcht als zijn klasse-index **≤ de hoogste** geselecteerde index (gekozen klasse én alles eronder). Identiek aan aanvraagtijd. Lege waarde op de locatie matcht nooit als er een selectie is.
 - **drempel ≤** (aanvraagtijd): geordende klassen index 0..3. Locatie matcht als zijn index **≤ de hoogste** geselecteerde index ("binnen X weken"). Lege waarde matcht nooit als er een selectie is.
 
 Sidebar: vijf nieuwe `Section`-blokken met `Check`-vinkjes. Alleen presets als vinkjes. Event type heeft 10 opties — acceptabel als lange lijst; geen collapse nodig (YAGNI).
@@ -108,7 +108,7 @@ Korte aanvulling onder **Locaties → Zoeken & filteren**: noem de nieuwe filter
 
 `applyFilters` is een pure functie → Vitest-unittest (`LocatieFilterSidebar.test.ts` of naast de bestaande tests):
 - match-any: locatie met `['festivals']` matcht filter `['festivals','beurzen']`; matcht niet `['parken']`.
-- drempel ≥ volume: locatie `5001-10000` matcht selectie `2501-5000` (hoger); matcht niet selectie `10000+`.
+- drempel ≤ volume: locatie `2501-5000` matcht selectie `5001-10000` (eronder); locatie `5001-10000` matcht niet selectie `2501-5000`.
 - drempel ≤ aanvraagtijd: locatie `2_weken` matcht selectie `4_weken`; locatie `langer` matcht niet selectie `4_weken`.
 - lege locatiewaarde matcht niet bij een actieve drempel-selectie.
 - lege filters → alles ongewijzigd.

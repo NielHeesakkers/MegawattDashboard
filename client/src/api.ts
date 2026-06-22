@@ -443,6 +443,11 @@ export interface Location {
   breedte: number | null;
   m2: number | null;
   notities: string;
+  stroomvoorzieningTypes: string[];
+  aanvraagtijd: string;
+  volumeSampling: string;
+  doelgroepen: string[];
+  eventTypes: string[];
   createdAt: string;
   updatedAt: string;
   contacts: LocationContact[];

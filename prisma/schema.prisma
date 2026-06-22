@@ -364,6 +364,12 @@ model Location {
   breedte           Float?
   m2                Float?
   notities          String   @default("")
+  // Extra kenmerken — meervoudige velden als JSON-array in tekst, enkelvoudige als tekst
+  stroomvoorzieningTypes String @default("[]")
+  aanvraagtijd           String @default("")
+  volumeSampling         String @default("")
+  doelgroepen            String @default("[]")
+  eventTypes             String @default("[]")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

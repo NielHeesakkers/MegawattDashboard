@@ -3,9 +3,13 @@ import { useToast } from '../ui/Toast';
 import { useAutoSave, SaveIndicator } from '../../hooks/useAutoSave';
 import {
   fetchLocation, createLocation, updateLocation, deleteLocation, suggestAdres, AdresSuggestion,
-  Location, LocationWriteInput, OmgevingType, Orientatie, LocationPhoto,
+  Location, LocationWriteInput, OmgevingType, Orientatie, EigendomType, LocationPhoto,
 } from '../../api';
 import { EUROPESE_LANDEN_PRIO, EUROPESE_LANDEN_REST } from '../../shared/countries';
+import {
+  STROOMVOORZIENING_PRESETS, AANVRAAGTIJD_OPTIONS, VOLUME_SAMPLING_OPTIONS,
+  DOELGROEP_PRESETS, EVENT_TYPE_PRESETS, Optie,
+} from './locatieKenmerken';
 import LocatieMap from './LocatieMap';
 import LocatieContactsSection from './LocatieContactsSection';
 import LocatieCostsSection from './LocatieCostsSection';
@@ -44,6 +48,59 @@ function Field({ label, children, className = '' }: { label: string; children: R
   );
 }
 
+function MultiChips({
+  options, values, onChange, allowCustom = false,
+}: {
+  options: ReadonlyArray<Optie>;
+  values: string[];
+  onChange: (next: string[]) => void;
+  allowCustom?: boolean;
+}) {
+  const [customInput, setCustomInput] = useState('');
+
+  const toggle = (key: string) => {
+    onChange(values.includes(key) ? values.filter((v) => v !== key) : [...values, key]);
+  };
+
+  const addCustom = () => {
+    const v = customInput.trim();
+    if (v && !values.includes(v)) onChange([...values, v]);
+    setCustomInput('');
+  };
+
+  const presetKeys = new Set(options.map((o) => o.key));
+  const customValues = values.filter((v) => !presetKeys.has(v));
+
+  return (
+    <div className="flex flex-wrap gap-2 mt-1">
+      {options.map((o) => (
+        <label key={o.key} className="flex items-center gap-1.5 text-[13px] text-white cursor-pointer px-3 py-1.5 rounded-lg ring-1 transition-colors"
+          style={{ background: values.includes(o.key) ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)', boxShadow: values.includes(o.key) ? '0 0 0 1px rgba(255,255,255,0.25)' : '0 0 0 1px rgba(255,255,255,0.08)' }}>
+          <input type="checkbox" className="sr-only" checked={values.includes(o.key)} onChange={() => toggle(o.key)} />
+          {o.label}
+        </label>
+      ))}
+      {customValues.map((v) => (
+        <span key={v} className="flex items-center gap-1.5 text-[13px] text-white px-3 py-1.5 rounded-lg ring-1"
+          style={{ background: 'rgba(255,255,255,0.12)', boxShadow: '0 0 0 1px rgba(255,255,255,0.25)' }}>
+          {v}
+          <button type="button" onClick={() => onChange(values.filter((x) => x !== v))} className="text-[rgba(255,255,255,0.5)] hover:text-white cursor-pointer leading-none">×</button>
+        </span>
+      ))}
+      {allowCustom && (
+        <input
+          className={`${inputClass} h-8 text-[13px] w-32`}
+          placeholder="anders…"
+          value={customInput}
+          onChange={(e) => setCustomInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } }}
+          onBlur={addCustom}
+        />
+      )}
+    </div>
+  );
+}
+
 type FormState = LocationWriteInput & { lat: number | null; lng: number | null; photos: LocationPhoto[] };
 
 function emptyForm(): FormState {
@@ -54,6 +111,7 @@ function emptyForm(): FormState {
     vergunningNodig: false, vergunningLink: null, truckBereikbaar: false,
     geschiktActivatie: false, geschiktSampling: false, geschiktHotspot: false, geschiktAnder: null,
     stroom: false, verlichting: false,
+    stroomvoorzieningTypes: [], aanvraagtijd: '', volumeSampling: '', doelgroepen: [], eventTypes: [],
     lengte: null, breedte: null, m2: null,
     notities: '',
     contacts: [{ naam: '', email: null, telefoon: null, website: null, rol: null }],
@@ -70,6 +128,7 @@ function fromLocation(loc: Location): FormState {
     vergunningNodig: loc.vergunningNodig, vergunningLink: loc.vergunningLink, truckBereikbaar: loc.truckBereikbaar,
     geschiktActivatie: loc.geschiktActivatie, geschiktSampling: loc.geschiktSampling, geschiktHotspot: loc.geschiktHotspot, geschiktAnder: loc.geschiktAnder,
     stroom: loc.stroom, verlichting: loc.verlichting,
+    stroomvoorzieningTypes: loc.stroomvoorzieningTypes, aanvraagtijd: loc.aanvraagtijd, volumeSampling: loc.volumeSampling, doelgroepen: loc.doelgroepen, eventTypes: loc.eventTypes,
     lengte: loc.lengte, breedte: loc.breedte, m2: loc.m2,
     notities: loc.notities,
     contacts: loc.contacts.length === 0
@@ -264,9 +323,34 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
             })()}
           </Field>
           <Field label="Aanlooprichting">
-            <select className={inputClass} value={form.orientatie} onChange={(e) => set('orientatie', e.target.value as Orientatie)}>
-              {(['N', 'NO', 'O', 'ZO', 'Z', 'ZW', 'W', 'NW'] as const).map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
+            {(() => {
+              const DIRS = ['N', 'NO', 'O', 'ZO', 'Z', 'ZW', 'W', 'NW'];
+              const isCustom = !DIRS.includes(form.orientatie);
+              return (
+                <>
+                  <select
+                    className={inputClass}
+                    value={isCustom ? '__anders__' : form.orientatie}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      set('orientatie', (v === '__anders__' ? '' : v) as Orientatie);
+                    }}
+                  >
+                    {DIRS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    <option value="__anders__">Andere…</option>
+                  </select>
+                  {isCustom && (
+                    <input
+                      className={`${inputClass} mt-2`}
+                      placeholder="Beschrijf de aanlooprichting"
+                      value={form.orientatie}
+                      onChange={(e) => set('orientatie', e.target.value as Orientatie)}
+                      autoFocus
+                    />
+                  )}
+                </>
+              );
+            })()}
           </Field>
         </div>
       </Section>
@@ -304,18 +388,81 @@ export default function LocatieDetailPage({ locationId, onBack, onDeleted, onCre
 
       <Section title="Voorzieningen">
         <div className="flex items-center gap-8 flex-wrap">
-          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="checkbox" checked={form.stroom} onChange={(e) => set('stroom', e.target.checked)} /> Stroom aanwezig</label>
+          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer">
+            <input type="checkbox" checked={form.stroom} onChange={(e) => {
+              setForm((f) => ({ ...f, stroom: e.target.checked, stroomvoorzieningTypes: e.target.checked ? f.stroomvoorzieningTypes : [] }));
+            }} /> Stroom aanwezig
+          </label>
           <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="checkbox" checked={form.verlichting} onChange={(e) => set('verlichting', e.target.checked)} /> Verlichting aanwezig</label>
           <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="checkbox" checked={form.truckBereikbaar} onChange={(e) => set('truckBereikbaar', e.target.checked)} /> Bereikbaar met bakwagen</label>
         </div>
+        {form.stroom && (
+          <Field label="Stroomvoorziening" className="mt-3">
+            <MultiChips
+              options={STROOMVOORZIENING_PRESETS}
+              values={form.stroomvoorzieningTypes}
+              onChange={(v) => set('stroomvoorzieningTypes', v)}
+              allowCustom
+            />
+          </Field>
+        )}
+      </Section>
+
+      <Section title="Inzet & doelgroep">
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Aanvraagtijd">
+            <select className={inputClass} value={form.aanvraagtijd} onChange={(e) => set('aanvraagtijd', e.target.value)}>
+              <option value="">—</option>
+              {AANVRAAGTIJD_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Volume sampling (passanten/dag)">
+            <select className={inputClass} value={form.volumeSampling} onChange={(e) => set('volumeSampling', e.target.value)}>
+              <option value="">—</option>
+              {VOLUME_SAMPLING_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+          </Field>
+        </div>
+        <Field label="Doelgroepen">
+          <MultiChips
+            options={DOELGROEP_PRESETS}
+            values={form.doelgroepen}
+            onChange={(v) => set('doelgroepen', v)}
+            allowCustom
+          />
+        </Field>
+        <Field label="Event type">
+          <MultiChips
+            options={EVENT_TYPE_PRESETS}
+            values={form.eventTypes}
+            onChange={(v) => set('eventTypes', v)}
+            allowCustom
+          />
+        </Field>
       </Section>
 
       <Section title="Eigendomstype">
-        <div className="flex items-center gap-8 flex-wrap">
-          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'particulier'} onChange={() => set('eigendomType', 'particulier')} /> Particulier</label>
-          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'gemeentelijk'} onChange={() => set('eigendomType', 'gemeentelijk')} /> Gemeente</label>
-          <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'bedrijf'} onChange={() => set('eigendomType', 'bedrijf')} /> Bedrijf</label>
-        </div>
+        {(() => {
+          const EIG_PRESETS = ['particulier', 'gemeentelijk', 'bedrijf'];
+          const isCustom = !EIG_PRESETS.includes(form.eigendomType);
+          return (
+            <div className="flex items-center gap-8 flex-wrap">
+              <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'particulier'} onChange={() => set('eigendomType', 'particulier')} /> Particulier</label>
+              <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'gemeentelijk'} onChange={() => set('eigendomType', 'gemeentelijk')} /> Gemeente</label>
+              <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={form.eigendomType === 'bedrijf'} onChange={() => set('eigendomType', 'bedrijf')} /> Bedrijf</label>
+              <label className="flex items-center gap-2 text-[14px] text-white cursor-pointer"><input type="radio" checked={isCustom} onChange={() => set('eigendomType', '' as EigendomType)} /> Anders</label>
+              {isCustom && (
+                <input
+                  className={`${inputClass} flex-1 min-w-[160px] h-9`}
+                  placeholder="Beschrijf het eigendomstype"
+                  value={form.eigendomType}
+                  onChange={(e) => set('eigendomType', e.target.value as EigendomType)}
+                  autoFocus
+                />
+              )}
+            </div>
+          );
+        })()}
       </Section>
 
       <Section title="Vergunning">

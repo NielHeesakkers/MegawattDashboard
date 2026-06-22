@@ -12,6 +12,11 @@ import { uploadsDir } from '../middleware/upload';
 
 const router = Router();
 
+function serializeLocation<T extends { stroomvoorzieningTypes: string; doelgroepen: string; eventTypes: string }>(loc: T) {
+  const arr = (s: string): string[] => { try { const v = JSON.parse(s); return Array.isArray(v) ? v : []; } catch { return []; } };
+  return { ...loc, stroomvoorzieningTypes: arr(loc.stroomvoorzieningTypes), doelgroepen: arr(loc.doelgroepen), eventTypes: arr(loc.eventTypes) };
+}
+
 const photoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -48,7 +53,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     take,
     skip,
   });
-  res.json(locations);
+  res.json(locations.map(serializeLocation));
 });
 
 // GET /api/locations/:id — enkele locatie
@@ -68,7 +73,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     },
   });
   if (!location) { res.status(404).json({ error: 'Locatie niet gevonden' }); return; }
-  res.json(location);
+  res.json(serializeLocation(location));
 });
 
 interface ContactInput { naam: string; email?: string | null; telefoon?: string | null; website?: string | null; rol?: string | null; }
@@ -96,6 +101,11 @@ interface LocationInput {
   notities: string;
   contacts: ContactInput[];
   costs: CostInput[];
+  stroomvoorzieningTypes?: string[];
+  aanvraagtijd?: string;
+  volumeSampling?: string;
+  doelgroepen?: string[];
+  eventTypes?: string[];
 }
 
 // POST /api/locations — nieuwe locatie
@@ -141,6 +151,11 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
           breedte: body.breedte ?? null,
           m2: body.m2 ?? null,
           notities: body.notities ?? '',
+          stroomvoorzieningTypes: JSON.stringify(body.stroomvoorzieningTypes ?? []),
+          aanvraagtijd: body.aanvraagtijd ?? '',
+          volumeSampling: body.volumeSampling ?? '',
+          doelgroepen: JSON.stringify(body.doelgroepen ?? []),
+          eventTypes: JSON.stringify(body.eventTypes ?? []),
           contacts: { create: (body.contacts ?? []).map((c, i) => ({ ...c, order: i })) },
           costs: { create: (body.costs ?? []).map((c, i) => ({ ...c, order: i })) },
         },
@@ -164,7 +179,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 
   await logAudit('CREATE', 'Location', location.id, { naam: body.naam, code: location.code }, req.adminUsername);
-  res.status(201).json(location);
+  res.status(201).json(serializeLocation(location));
 });
 
 // PUT /api/locations/:id — update (contacts/costs worden volledig vervangen)
@@ -213,6 +228,11 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         breedte: body.breedte ?? null,
         m2: body.m2 ?? null,
         notities: body.notities ?? '',
+        stroomvoorzieningTypes: JSON.stringify(body.stroomvoorzieningTypes ?? []),
+        aanvraagtijd: body.aanvraagtijd ?? '',
+        volumeSampling: body.volumeSampling ?? '',
+        doelgroepen: JSON.stringify(body.doelgroepen ?? []),
+        eventTypes: JSON.stringify(body.eventTypes ?? []),
         contacts: { create: (body.contacts ?? []).map((c, i) => ({ ...c, order: i })) },
         costs: { create: (body.costs ?? []).map((c, i) => ({ ...c, order: i })) },
       },
@@ -221,7 +241,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   });
 
   await logAudit('UPDATE', 'Location', id, { naam: body.naam }, req.adminUsername);
-  res.json(location);
+  res.json(serializeLocation(location));
 });
 
 // DELETE /api/locations/:id — met ?force=true om cascade door LocProjects te bevestigen

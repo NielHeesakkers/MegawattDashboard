@@ -1,4 +1,13 @@
 import type { Location } from '../../api';
+import {
+  STROOMVOORZIENING_PRESETS,
+  DOELGROEP_PRESETS,
+  EVENT_TYPE_PRESETS,
+  AANVRAAGTIJD_OPTIONS,
+  VOLUME_SAMPLING_OPTIONS,
+  AANVRAAGTIJD_ORDER,
+  VOLUME_SAMPLING_ORDER,
+} from './locatieKenmerken';
 
 export const M2_BUCKETS: ReadonlyArray<{ key: string; label: string; min: number; max: number | null }> = [
   { key: '≤10', label: '≤ 10 m²', min: 0, max: 10 },
@@ -22,9 +31,14 @@ export interface LocatieFilters {
   geschiktVoor: Array<'activatie' | 'sampling'>;
   voorzieningen: Array<'stroom' | 'verlichting' | 'vergunning' | 'truck'>;
   eigendom: Array<'particulier' | 'gemeentelijk' | 'bedrijf'>;
+  stroomvoorziening: string[];
+  aanvraagtijd: string[];
+  volumeSampling: string[];
+  doelgroepen: string[];
+  eventTypes: string[];
 }
 
-export const EMPTY_FILTERS: LocatieFilters = { landen: [], m2Buckets: [], geschiktVoor: [], voorzieningen: [], eigendom: [] };
+export const EMPTY_FILTERS: LocatieFilters = { landen: [], m2Buckets: [], geschiktVoor: [], voorzieningen: [], eigendom: [], stroomvoorziening: [], aanvraagtijd: [], volumeSampling: [], doelgroepen: [], eventTypes: [] };
 
 export function applyFilters(locations: Location[], f: LocatieFilters, search: string): Location[] {
   const q = search.trim().toLowerCase();
@@ -44,12 +58,28 @@ export function applyFilters(locations: Location[], f: LocatieFilters, search: s
     if (f.voorzieningen.includes('vergunning') && loc.vergunningNodig) return false;
     if (f.voorzieningen.includes('truck') && !loc.truckBereikbaar) return false;
     if (f.eigendom.length && !f.eigendom.includes(loc.eigendomType)) return false;
+    // match-any: locatie heeft minstens één geselecteerde waarde
+    if (f.stroomvoorziening.length && !f.stroomvoorziening.some((v) => (loc.stroomvoorzieningTypes ?? []).includes(v))) return false;
+    if (f.doelgroepen.length && !f.doelgroepen.some((v) => (loc.doelgroepen ?? []).includes(v))) return false;
+    if (f.eventTypes.length && !f.eventTypes.some((v) => (loc.eventTypes ?? []).includes(v))) return false;
+    // volume sampling: drempel ≤ (gekozen klasse én alles eronder; net als aanvraagtijd)
+    if (f.volumeSampling.length) {
+      const locIdx = VOLUME_SAMPLING_ORDER.indexOf(loc.volumeSampling);
+      const maxSel = Math.max(...f.volumeSampling.map((v) => VOLUME_SAMPLING_ORDER.indexOf(v)));
+      if (locIdx < 0 || locIdx > maxSel) return false;
+    }
+    // aanvraagtijd: drempel ≤ (binnen X weken; locatie niet langzamer dan de hoogste selectie)
+    if (f.aanvraagtijd.length) {
+      const locIdx = AANVRAAGTIJD_ORDER.indexOf(loc.aanvraagtijd);
+      const maxSel = Math.max(...f.aanvraagtijd.map((v) => AANVRAAGTIJD_ORDER.indexOf(v)));
+      if (locIdx < 0 || locIdx > maxSel) return false;
+    }
     return true;
   });
 }
 
 function isEmpty(f: LocatieFilters): boolean {
-  return !f.landen.length && !f.m2Buckets.length && !f.geschiktVoor.length && !f.voorzieningen.length && !f.eigendom.length;
+  return !f.landen.length && !f.m2Buckets.length && !f.geschiktVoor.length && !f.voorzieningen.length && !f.eigendom.length && !f.stroomvoorziening.length && !f.aanvraagtijd.length && !f.volumeSampling.length && !f.doelgroepen.length && !f.eventTypes.length;
 }
 
 interface Props {
@@ -120,6 +150,36 @@ export default function LocatieFilterSidebar({ filters, onChange, availableLande
         <Check checked={filters.eigendom.includes('particulier')} onClick={() => toggle('eigendom', 'particulier')} label="Particulier" />
         <Check checked={filters.eigendom.includes('gemeentelijk')} onClick={() => toggle('eigendom', 'gemeentelijk')} label="Gemeentelijk" />
         <Check checked={filters.eigendom.includes('bedrijf')} onClick={() => toggle('eigendom', 'bedrijf')} label="Bedrijf" />
+      </Section>
+
+      <Section title="Stroomvoorziening">
+        {STROOMVOORZIENING_PRESETS.map((o) => (
+          <Check key={o.key} checked={filters.stroomvoorziening.includes(o.key)} onClick={() => toggle('stroomvoorziening', o.key)} label={o.label} />
+        ))}
+      </Section>
+
+      <Section title="Aanvraagtijd">
+        {AANVRAAGTIJD_OPTIONS.map((o) => (
+          <Check key={o.key} checked={filters.aanvraagtijd.includes(o.key)} onClick={() => toggle('aanvraagtijd', o.key)} label={o.label} />
+        ))}
+      </Section>
+
+      <Section title="Volume sampling">
+        {VOLUME_SAMPLING_OPTIONS.map((o) => (
+          <Check key={o.key} checked={filters.volumeSampling.includes(o.key)} onClick={() => toggle('volumeSampling', o.key)} label={o.label} />
+        ))}
+      </Section>
+
+      <Section title="Doelgroep">
+        {DOELGROEP_PRESETS.map((o) => (
+          <Check key={o.key} checked={filters.doelgroepen.includes(o.key)} onClick={() => toggle('doelgroepen', o.key)} label={o.label} />
+        ))}
+      </Section>
+
+      <Section title="Event type">
+        {EVENT_TYPE_PRESETS.map((o) => (
+          <Check key={o.key} checked={filters.eventTypes.includes(o.key)} onClick={() => toggle('eventTypes', o.key)} label={o.label} />
+        ))}
       </Section>
     </aside>
   );

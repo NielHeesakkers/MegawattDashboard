@@ -166,6 +166,7 @@ export const HELP_CONTENT: Record<string, ReactNode> = {
       </Ul>
       <H>Zoeken & filteren</H>
       <P>Gebruik de zoekbalk (zoekt op naam en adres) en de filters links: land, grootte (m²), geschikt voor en voorzieningen. De lijst toont meteen de treffers.</P>
+      <P>Er zijn extra filters: <B>stroomvoorziening</B>, <B>aanvraagtijd</B>, <B>volume sampling</B>, <B>doelgroep</B> en <B>event type</B>. Bij <B>volume sampling</B> en <B>aanvraagtijd</B> zie je de gekozen klasse én alles eronder (bv. "8 weken" toont ook 2 en 4 weken); de overige filters tonen locaties die op minstens één van je keuzes passen.</P>
       <H>Snel aan een project koppelen</H>
       <P>Klik in de lijst met de <B>rechtermuisknop</B> op een locatie → <B>Toevoegen aan project</B> → kies een lopend project. De locatie wordt direct gekoppeld (beschikbaarheid start op <B>Onbekend</B>). Zat 'ie al in dat project, dan gebeurt er niets dubbels.</P>
       <Tip>Vul het adres altijd via het zoekveld in — dan klopt de kaart en de nette adresnotatie automatisch.</Tip>

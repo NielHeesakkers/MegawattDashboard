@@ -1,6 +1,10 @@
 import { useEffect, useState, useMemo } from 'react';
 import { fetchLocations, Location, fetchProjects, addLocationToProject, Project } from '../../api';
-import { LocatieFilters, EMPTY_FILTERS, applyFilters, bucketOf, M2_BUCKETS } from './LocatieFilterSidebar';
+import { LocatieFilters, EMPTY_FILTERS, applyFilters, M2_BUCKETS } from './LocatieFilterSidebar';
+import {
+  STROOMVOORZIENING_PRESETS, DOELGROEP_PRESETS, EVENT_TYPE_PRESETS,
+  AANVRAAGTIJD_OPTIONS, VOLUME_SAMPLING_OPTIONS,
+} from './locatieKenmerken';
 import { landToFlag } from '../../shared/countries';
 import { useToast } from '../ui/Toast';
 
@@ -19,6 +23,7 @@ export default function LocatieListPage({ onOpenDetail }: Props) {
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [activeProjects, setActiveProjects] = useState<Project[]>([]);
   const [ctx, setCtx] = useState<{ x: number; y: number; loc: Location } | null>(null);
+  const [openFilter, setOpenFilter] = useState<string | null>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -36,6 +41,16 @@ export default function LocatieListPage({ onOpenDetail }: Props) {
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('click', close); document.removeEventListener('keydown', onKey); };
   }, [ctx]);
+
+  // Sluit een open filter-popover bij klik elders of Escape.
+  useEffect(() => {
+    if (!openFilter) return;
+    const close = () => setOpenFilter(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenFilter(null); };
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('click', close); document.removeEventListener('keydown', onKey); };
+  }, [openFilter]);
 
   const addToProject = async (project: Project, loc: Location) => {
     setCtx(null);
@@ -66,22 +81,30 @@ export default function LocatieListPage({ onOpenDetail }: Props) {
   const SortIcon = ({ column }: { column: SortKey }) =>
     sortKey !== column ? null : <span className="text-accent-teal ml-1">{sortDir === 'asc' ? '▲' : '▼'}</span>;
 
-  const isEmpty = !filters.landen.length && !filters.m2Buckets.length && !filters.geschiktVoor.length && !filters.voorzieningen.length && !filters.eigendom.length;
+  const isEmpty = !filters.landen.length && !filters.m2Buckets.length && !filters.geschiktVoor.length && !filters.voorzieningen.length && !filters.eigendom.length
+    && !filters.stroomvoorziening.length && !filters.aanvraagtijd.length && !filters.volumeSampling.length && !filters.doelgroepen.length && !filters.eventTypes.length;
 
-  function toggleFilter<K extends keyof LocatieFilters>(key: K, value: LocatieFilters[K][number]) {
+  const toggleGroup = (key: keyof LocatieFilters, value: string) => {
     const current = filters[key] as string[];
-    const next = current.includes(value as string) ? current.filter(v => v !== value) : [...current, value as string];
+    const next = current.includes(value) ? current.filter(v => v !== value) : [...current, value];
     setFilters({ ...filters, [key]: next } as LocatieFilters);
-  }
+  };
 
-  const Chip = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
-    <button onClick={onClick} className={`px-2.5 h-7 rounded-full text-[12px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
-      active ? 'bg-accent-teal text-[#1a3a38]'
-             : 'bg-[rgba(255,255,255,0.05)] ring-1 ring-[rgba(255,255,255,0.1)] text-[rgba(255,255,255,0.55)] hover:text-white hover:bg-[rgba(255,255,255,0.1)]'
-    }`}>
-      {children}
-    </button>
-  );
+  type FilterOption = { value: string; label: string; flag?: string };
+  type FilterGroup = { key: keyof LocatieFilters; label: string; options: FilterOption[] };
+  const filterGroups: FilterGroup[] = useMemo(() => [
+    { key: 'landen', label: 'Land', options: landen.map(l => ({ value: l, label: l, flag: landToFlag(l) })) },
+    { key: 'm2Buckets', label: 'Oppervlak', options: M2_BUCKETS.map(b => ({ value: b.key, label: b.label })) },
+    { key: 'geschiktVoor', label: 'Geschikt', options: [{ value: 'activatie', label: 'Activatie' }, { value: 'sampling', label: 'Mass sampling' }] },
+    { key: 'voorzieningen', label: 'Voorzieningen', options: [{ value: 'stroom', label: 'Stroom' }, { value: 'verlichting', label: 'Verlichting' }, { value: 'vergunning', label: 'Vergunning vrij' }, { value: 'truck', label: 'Bakwagen' }] },
+    { key: 'eigendom', label: 'Eigendom', options: [{ value: 'particulier', label: 'Particulier' }, { value: 'gemeentelijk', label: 'Gemeentelijk' }, { value: 'bedrijf', label: 'Bedrijf' }] },
+    { key: 'stroomvoorziening', label: 'Stroom', options: STROOMVOORZIENING_PRESETS.map(o => ({ value: o.key, label: o.label })) },
+    { key: 'aanvraagtijd', label: 'Aanvraag', options: AANVRAAGTIJD_OPTIONS.map(o => ({ value: o.key, label: o.label })) },
+    { key: 'volumeSampling', label: 'Volume', options: VOLUME_SAMPLING_OPTIONS.map(o => ({ value: o.key, label: o.label })) },
+    { key: 'doelgroepen', label: 'Doelgroep', options: DOELGROEP_PRESETS.map(o => ({ value: o.key, label: o.label })) },
+    { key: 'eventTypes', label: 'Event', options: EVENT_TYPE_PRESETS.map(o => ({ value: o.key, label: o.label })) },
+  ], [landen]);
+  const activeCount = filterGroups.reduce((a, g) => a + (filters[g.key] as string[]).length, 0);
 
   return (
     <div className="px-6 py-6">
@@ -98,41 +121,69 @@ export default function LocatieListPage({ onOpenDetail }: Props) {
         </button>
       </div>
 
-      {/* Filter chips bovenaan */}
-      <div className="space-y-2 mb-5 pb-4 border-b border-[rgba(255,255,255,0.08)]">
-        {landen.length > 1 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[rgba(255,255,255,0.4)] w-20">Land</span>
-            {landen.map(l => <Chip key={l} active={filters.landen.includes(l)} onClick={() => toggleFilter('landen', l)}><span className="mr-1">{landToFlag(l)}</span>{l}</Chip>)}
+      {/* Filterbalk: pillen met multiselect-popovers + actieve-filter breadcrumb */}
+      <div className="mb-4 pb-4 border-b border-[rgba(255,255,255,0.08)]">
+        <div className="flex items-center gap-2 flex-wrap">
+          {filterGroups.map(g => {
+            const sel = filters[g.key] as string[];
+            const open = openFilter === g.key;
+            return (
+              <div key={g.key} className="relative">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setOpenFilter(open ? null : g.key); }}
+                  className={`flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium ring-1 transition-colors cursor-pointer ${
+                    sel.length ? 'ring-accent-teal text-accent-teal bg-accent-teal/10'
+                               : 'ring-[rgba(255,255,255,0.12)] text-[rgba(255,255,255,0.6)] bg-[rgba(255,255,255,0.05)] hover:text-white'
+                  }`}
+                >
+                  {g.label}
+                  {sel.length > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-accent-teal text-[#1a3a38] text-[10px] font-bold">{sel.length}</span>
+                  )}
+                  <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+                </button>
+                {open && (
+                  <div onClick={(e) => e.stopPropagation()} className="absolute z-30 mt-1 left-0 w-56 max-h-72 overflow-auto rounded-lg ring-1 ring-[rgba(255,255,255,0.15)] bg-bg-surface shadow-xl p-1.5">
+                    {g.options.length === 0 ? (
+                      <div className="px-2 py-1.5 text-[12px] text-[rgba(255,255,255,0.4)]">Geen opties</div>
+                    ) : g.options.map(o => {
+                      const on = sel.includes(o.value);
+                      return (
+                        <button key={o.value} onClick={() => toggleGroup(g.key, o.value)}
+                          className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] text-left transition-colors ${on ? 'text-accent-teal' : 'text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.05)]'}`}>
+                          <span className={`w-4 h-4 rounded flex items-center justify-center ring-1 shrink-0 ${on ? 'bg-accent-teal ring-accent-teal text-[#1a3a38]' : 'ring-[rgba(255,255,255,0.25)]'}`}>
+                            {on && <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>}
+                          </span>
+                          {o.flag && <span>{o.flag}</span>}
+                          {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {!isEmpty && (
+          <div className="flex items-center gap-2 flex-wrap mt-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[rgba(255,255,255,0.4)]">Actief ({activeCount})</span>
+            {filterGroups.flatMap(g => (filters[g.key] as string[]).map(v => {
+              const opt = g.options.find(o => o.value === v);
+              return (
+                <span key={g.key + v} className="inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1 rounded-full bg-accent-teal text-[#1a3a38] text-[12px] font-medium">
+                  {opt?.label ?? v}
+                  <button onClick={() => toggleGroup(g.key, v)} aria-label="Verwijder filter" className="w-4 h-4 rounded-full flex items-center justify-center bg-black/15 hover:bg-black/30 cursor-pointer leading-none">
+                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </span>
+              );
+            }))}
+            <span className="text-[12px] text-[rgba(255,255,255,0.4)]">· {sorted.length} {sorted.length === 1 ? 'resultaat' : 'resultaten'}</span>
+            <button onClick={() => setFilters(EMPTY_FILTERS)} className="text-[12px] text-accent-teal hover:opacity-80 cursor-pointer">Wis alles</button>
           </div>
         )}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[rgba(255,255,255,0.4)] w-20">m²</span>
-          {M2_BUCKETS.map(b => <Chip key={b.key} active={filters.m2Buckets.includes(b.key)} onClick={() => toggleFilter('m2Buckets', b.key)}>{b.label}</Chip>)}
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[rgba(255,255,255,0.4)] w-20">Geschikt</span>
-          <Chip active={filters.geschiktVoor.includes('activatie')} onClick={() => toggleFilter('geschiktVoor', 'activatie')}>Activatie</Chip>
-          <Chip active={filters.geschiktVoor.includes('sampling')} onClick={() => toggleFilter('geschiktVoor', 'sampling')}>Mass sampling</Chip>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[rgba(255,255,255,0.4)] w-20">Voorzien.</span>
-          <Chip active={filters.voorzieningen.includes('stroom')} onClick={() => toggleFilter('voorzieningen', 'stroom')}>Stroom</Chip>
-          <Chip active={filters.voorzieningen.includes('verlichting')} onClick={() => toggleFilter('voorzieningen', 'verlichting')}>Verlichting</Chip>
-          <Chip active={filters.voorzieningen.includes('vergunning')} onClick={() => toggleFilter('voorzieningen', 'vergunning')}>Vergunning vrij</Chip>
-          <Chip active={filters.voorzieningen.includes('truck')} onClick={() => toggleFilter('voorzieningen', 'truck')}>Bakwagen</Chip>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[rgba(255,255,255,0.4)] w-20">Eigendom</span>
-          <Chip active={filters.eigendom.includes('particulier')} onClick={() => toggleFilter('eigendom', 'particulier')}>Particulier</Chip>
-          <Chip active={filters.eigendom.includes('gemeentelijk')} onClick={() => toggleFilter('eigendom', 'gemeentelijk')}>Gemeentelijk</Chip>
-          <Chip active={filters.eigendom.includes('bedrijf')} onClick={() => toggleFilter('eigendom', 'bedrijf')}>Bedrijf</Chip>
-          {!isEmpty && (
-            <button onClick={() => setFilters(EMPTY_FILTERS)} className="ml-auto text-[rgba(255,255,255,0.4)] hover:text-white text-[12px] cursor-pointer">
-              Wis filters
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Tabel */}
@@ -200,9 +251,6 @@ export default function LocatieListPage({ onOpenDetail }: Props) {
           </table>
         </div>
       )}
-
-      {/* Suppress voor M2_BUCKETS bucket helper niet gebruikt */}
-      <div className="hidden">{bucketOf(0)}</div>
 
       {/* Rechtsklik-menu: locatie aan een lopend project toevoegen */}
       {ctx && (
