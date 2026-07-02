@@ -234,8 +234,8 @@ export default function LocatieListPage({ onOpenDetail }: Props) {
                     <td className="px-3 py-2"><span className="text-accent-teal font-medium whitespace-nowrap">{loc.naam || 'Naamloos'}</span></td>
                     <td className="hidden md:table-cell px-3 py-2 text-text-secondary whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5">
-                        {loc.stad}
                         {loc.land && <span className="text-[14px]" title={loc.land}>{landToFlag(loc.land)}</span>}
+                        {loc.stad}
                       </span>
                     </td>
                     <td className="hidden lg:table-cell px-3 py-2 text-text-secondary whitespace-nowrap">{loc.m2 ?? '—'}</td>
