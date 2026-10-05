@@ -7,7 +7,7 @@ import sharp from 'sharp';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
 import { geocode, formatAddress, suggest } from '../lib/geocode';
-import { generateLocationCode } from '../lib/locationCode';
+import { generateLocationCode, codeMatchesCity } from '../lib/locationCode';
 import { uploadsDir } from '../middleware/upload';
 
 const router = Router();
@@ -199,6 +199,9 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   if (addressChanged && body.adres) coords = await geocode(body.adres, body.land);
   const canonicalAdres = coords ? formatAddress(coords) || body.adres : body.adres;
   const stad = coords?.city ?? existing.stad;
+  // Code volgt de stad: na verhuizing naar een andere stad (of eerst niet-gevonden adres → LOC_) een nieuwe code.
+  // ponytail: geen retry op code-collisie zoals bij create; gelijktijdige edits in dezelfde stad zijn zeldzaam.
+  const code = codeMatchesCity(existing.code, stad) ? existing.code : await generateLocationCode(stad);
 
   const location = await prisma.$transaction(async (tx) => {
     await tx.locationContact.deleteMany({ where: { locationId: id } });
@@ -206,6 +209,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     return tx.location.update({
       where: { id },
       data: {
+        code,
         naam: body.naam,
         land: body.land,
         stad,
@@ -240,7 +244,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     });
   });
 
-  await logAudit('UPDATE', 'Location', id, { naam: body.naam }, req.adminUsername);
+  await logAudit('UPDATE', 'Location', id, { naam: body.naam, ...(code !== existing.code && { code: `${existing.code} → ${code}` }) }, req.adminUsername);
   res.json(serializeLocation(location));
 });
 

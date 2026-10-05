@@ -3,6 +3,11 @@
 Alle noemenswaardige wijzigingen aan het Megawatt Dashboard.
 Vanaf 1.6.0 per release `+0.0.1` omhoog.
 
+## v1.6.5 — 5 oktober 2026
+
+### Gewijzigd
+- **Locatiecode volgt de stad** — als een locatie na het bewerken in een andere stad blijkt te liggen (of een eerder niet-gevonden adres alsnog gevonden wordt), krijgt hij een nieuwe code met het juiste stadsprefix (bv. `LOC_002` → `BRE_001`). Codes die al bij de stad passen veranderen niet. De wijziging staat in de audit log.
+
 ## v1.6.4 — 5 oktober 2026
 
 ### Toegevoegd

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cityPrefix } from './locationCode';
+import { cityPrefix, codeMatchesCity } from './locationCode';
 
 describe('cityPrefix', () => {
   it('returns first 3 uppercase letters', () => {
@@ -30,5 +30,17 @@ describe('cityPrefix', () => {
     expect(cityPrefix('NY')).toBeNull();
     expect(cityPrefix('A B')).toBeNull();
     expect(cityPrefix('--')).toBeNull();
+  });
+});
+
+describe('codeMatchesCity', () => {
+  it('true when prefix matches city', () => {
+    expect(codeMatchesCity('SHE_002', "'s-Hertogenbosch")).toBe(true);
+    expect(codeMatchesCity('LOC_003', null)).toBe(true);
+  });
+  it('false when city changed or code missing', () => {
+    expect(codeMatchesCity('MAA_002', "'s-Hertogenbosch")).toBe(false);
+    expect(codeMatchesCity('LOC_001', 'Breda')).toBe(false);
+    expect(codeMatchesCity(null, 'Breda')).toBe(false);
   });
 });

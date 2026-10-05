@@ -13,6 +13,11 @@ export function cityPrefix(city: string | null | undefined): string | null {
   return cleaned.slice(0, 3);
 }
 
+// Past de code (bv. AMS_001) nog bij de stad? Na een adreswijziging naar een andere stad niet meer.
+export function codeMatchesCity(code: string | null | undefined, city: string | null | undefined): boolean {
+  return !!code && code.startsWith(`${cityPrefix(city) ?? 'LOC'}_`);
+}
+
 // Genereer volgende locatiecode voor deze stad-prefix, bv. AMS_001, AMS_002.
 // Fallback-prefix "LOC" wanneer de stad onbekend of te kort is.
 export async function generateLocationCode(city: string | null | undefined): Promise<string> {
