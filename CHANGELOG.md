@@ -3,6 +3,11 @@
 Alle noemenswaardige wijzigingen aan het Megawatt Dashboard.
 Vanaf 1.6.0 per release `+0.0.1` omhoog.
 
+## v1.6.4 — 5 oktober 2026
+
+### Toegevoegd
+- **Locaties importeren en exporteren via Excel** — onder Instellingen → Gegevensbeheer → *Locaties — Import & Export*. Import leest het locatie-importtemplate (.xlsx), toont vooraf hoeveel rijen nieuw/overgeslagen/ongeldig zijn en maakt de locaties één voor één aan via de gewone API (adres opzoeken, locatiecode en audit zoals bij handmatig invoeren). Locaties met een bestaande naam worden overgeslagen. Export levert dezelfde kolommen (plus Code en Stad), dus een export is weer te importeren.
+
 ## v1.6.3 — 18 juni 2026
 
 ### Toegevoegd

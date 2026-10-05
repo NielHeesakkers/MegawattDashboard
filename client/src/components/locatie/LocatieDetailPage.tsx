@@ -8,7 +8,7 @@ import {
 import { EUROPESE_LANDEN_PRIO, EUROPESE_LANDEN_REST } from '../../shared/countries';
 import {
   STROOMVOORZIENING_PRESETS, AANVRAAGTIJD_OPTIONS, VOLUME_SAMPLING_OPTIONS,
-  DOELGROEP_PRESETS, EVENT_TYPE_PRESETS, Optie,
+  DOELGROEP_PRESETS, EVENT_TYPE_PRESETS, OMGEVING_PRESETS, Optie,
 } from './locatieKenmerken';
 import LocatieMap from './LocatieMap';
 import LocatieContactsSection from './LocatieContactsSection';
@@ -21,13 +21,6 @@ const inputClass = 'h-10 px-3 rounded-lg bg-[rgba(255,255,255,0.04)] ring-1 ring
 const areaClass = 'px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.04)] ring-1 ring-[rgba(255,255,255,0.08)] text-white text-[14px] placeholder-[rgba(255,255,255,0.3)] focus:outline-none focus:ring-[rgba(255,255,255,0.2)]';
 
 
-const OMGEVING_PRESETS: Array<{ key: string; label: string }> = [
-  { key: 'centrum', label: 'Centrum' },
-  { key: 'winkelstraat', label: 'Winkelstraat' },
-  { key: 'park', label: 'Park' },
-  { key: 'plein', label: 'Plein' },
-  { key: 'stationsplein', label: 'Stationsplein' },
-];
 
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

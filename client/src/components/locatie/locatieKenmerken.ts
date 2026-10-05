@@ -4,6 +4,22 @@
 
 export interface Optie { key: string; label: string }
 
+// Enkelvoudig, extensible ("anders…" toegestaan).
+export const OMGEVING_PRESETS: ReadonlyArray<Optie> = [
+  { key: 'centrum', label: 'Centrum' },
+  { key: 'winkelstraat', label: 'Winkelstraat' },
+  { key: 'park', label: 'Park' },
+  { key: 'plein', label: 'Plein' },
+  { key: 'stationsplein', label: 'Stationsplein' },
+];
+
+// Enkelvoudig, extensible.
+export const EIGENDOM_PRESETS: ReadonlyArray<Optie> = [
+  { key: 'particulier', label: 'Particulier' },
+  { key: 'gemeentelijk', label: 'Gemeentelijk' },
+  { key: 'bedrijf', label: 'Bedrijf' },
+];
+
 // Meervoudig, extensible ("anders…" toegestaan), alleen relevant als stroom = ja.
 export const STROOMVOORZIENING_PRESETS: ReadonlyArray<Optie> = [
   { key: 'stroomput', label: 'Stroomput' },

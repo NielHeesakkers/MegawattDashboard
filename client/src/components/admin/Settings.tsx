@@ -6,7 +6,9 @@ import {
   fetchBackupList, downloadBackup, deleteBackup, triggerAutoBackup, BackupFile,
   fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser, sendWelcomeEmail, AdminUser,
   fetchAuditLogs, AuditLogEntry,
+  fetchLocations, createLocation,
 } from '../../api';
+import { parseXlsx, rowsToLocations, locationsToXlsx } from '../locatie/locatieExcel';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../ui/Toast';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -28,6 +30,71 @@ function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ---- Locaties import/export (Excel, formaat van Locatie-import-template.xlsx) ----
+function LocatiesExcelSection() {
+  const toast = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const handleExport = async () => {
+    setStatus('Exporteren…');
+    try {
+      const blob = new Blob([locationsToXlsx(await fetchLocations()) as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `locaties-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      toast.error('Export mislukt');
+    } finally {
+      setStatus(null);
+    }
+  };
+
+  // Rijen één voor één via de gewone create-API (server zoekt adressen op, ±1 per seconde).
+  const handleImport = async (file: File) => {
+    try {
+      const { ok, fouten } = rowsToLocations(parseXlsx(new Uint8Array(await file.arrayBuffer())));
+      const bestaand = new Set((await fetchLocations()).map((l) => (l.naam ?? '').trim().toLowerCase()));
+      const nieuw = ok.filter((r) => !bestaand.has(r.input.naam.trim().toLowerCase()));
+      const dubbel = ok.length - nieuw.length;
+      const vraag = `${nieuw.length} nieuwe locatie(s) importeren?`
+        + (dubbel ? `\n${dubbel} overgeslagen: naam bestaat al.` : '')
+        + (fouten.length ? `\n${fouten.length} rij(en) ongeldig:\n${fouten.map((f) => `  rij ${f.rij}: ${f.fout}`).join('\n')}` : '')
+        + (nieuw.length ? `\n\nAdressen worden opgezocht, dit duurt ±${Math.ceil(nieuw.length * 1.2)} sec.` : '');
+      if (!nieuw.length) { window.alert(vraag); return; }
+      if (!window.confirm(vraag)) return;
+
+      const mislukt: string[] = [];
+      for (const [i, r] of nieuw.entries()) {
+        setStatus(`Importeren ${i + 1}/${nieuw.length}…`);
+        try { await createLocation(r.input); } catch { mislukt.push(`rij ${r.rij}: ${r.input.naam}`); }
+      }
+      toast.success(`${nieuw.length - mislukt.length} locatie(s) geïmporteerd`);
+      if (mislukt.length) window.alert(`Niet gelukt:\n${mislukt.join('\n')}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Import mislukt');
+    } finally {
+      setStatus(null);
+    }
+  };
+
+  return (
+    <>
+      <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">Locaties — Import & Export</h3>
+      <p className="text-text-muted text-sm mb-3">Excel in het formaat van het locatie-importtemplate. Bestaande namen worden bij import overgeslagen.</p>
+      <div className="flex flex-wrap items-center gap-3 mb-8">
+        <input ref={fileRef} type="file" accept=".xlsx" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleImport(f); }} />
+        <button onClick={() => fileRef.current?.click()} disabled={!!status} className="flex items-center gap-2 px-4 py-2 rounded-[8px] bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.1)] text-text-primary text-sm hover:bg-[rgba(255,255,255,0.1)] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">Importeren (Excel)</button>
+        <button onClick={handleExport} disabled={!!status} className="flex items-center gap-2 px-4 py-2 rounded-[8px] bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.1)] text-text-primary text-sm hover:bg-[rgba(255,255,255,0.1)] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">Exporteren (Excel)</button>
+        {status && <span className="text-text-secondary text-sm">{status}</span>}
+      </div>
+    </>
+  );
 }
 
 // ---- Data tab ----
@@ -166,6 +233,8 @@ function DataTab() {
           {clearing ? 'Wissen...' : 'Alles wissen'}
         </button>
       </div>
+
+      <LocatiesExcelSection />
 
       {/* Backup list */}
       <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-3">Backups</h3>
