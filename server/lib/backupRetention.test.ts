@@ -64,9 +64,9 @@ describe('selectBackupsToKeep', () => {
     expect(keep.has(fname(target!))).toBe(false);
   });
 
-  it('bewaart een zondag binnen 12 weken maar buiten 30 dagen', () => {
+  it('bewaart een zondag binnen 12 weken maar buiten de dagelijkse periode', () => {
     let sun: Date | null = null;
-    for (let i = 31; i <= 84; i++) {
+    for (let i = DAILY_KEEP + 1; i <= 84; i++) {
       const d = dayBack(i);
       if (isSunday(d)) { sun = d; break; }
     }
@@ -74,7 +74,7 @@ describe('selectBackupsToKeep', () => {
     expect(keep.has(fname(sun!))).toBe(true);
   });
 
-  it('totaal bewaard ligt tussen 30 en 54 (overlap tussen categorieën)', () => {
+  it('totaal bewaard ligt tussen dagelijks en dagelijks+wekelijks+maandelijks (overlap)', () => {
     expect(keep.size).toBeGreaterThan(DAILY_KEEP);
     expect(keep.size).toBeLessThanOrEqual(DAILY_KEEP + WEEKLY_KEEP + MONTHLY_KEEP);
   });

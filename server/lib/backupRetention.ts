@@ -1,12 +1,12 @@
 // Retentie voor auto-backups (grandfather-father-son):
-//  - laatste 30 dagen   → dagelijkse backup (laatste per dag)
+//  - laatste 7 dagen    → dagelijkse backup (laatste per dag)
 //  - laatste 12 weken   → de zondag-backup (laatste per zondag)
 //  - laatste 12 maanden → de backup op de laatste dag van de maand
 // Een backup blijft bewaard als die in minstens één categorie valt.
 
 const FILENAME_RE = /^megawatt-backup-(\d{2})-(\d{2})-(\d{4})_(\d{2})(\d{2})\.zip$/;
 
-export const DAILY_KEEP = 30;
+export const DAILY_KEEP = 7;
 export const WEEKLY_KEEP = 12;
 export const MONTHLY_KEEP = 12;
 

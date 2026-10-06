@@ -472,7 +472,7 @@ router.delete('/clear', authMiddleware, async (req: AuthRequest, res: Response) 
 
 // ---- Auto backup ----
 
-// Pas de retentie toe: laatste 30 dagen + 12 weken (zondag) + 12 maanden (laatste dag).
+// Pas de retentie toe: laatste 7 dagen + 12 weken (zondag) + 12 maanden (laatste dag).
 // Onparsebare bestanden worden met rust gelaten.
 function pruneBackups(): void {
   const files = fs.readdirSync(backupDir)

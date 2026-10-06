@@ -3,6 +3,11 @@
 Alle noemenswaardige wijzigingen aan het Megawatt Dashboard.
 Vanaf 1.6.0 per release `+0.0.1` omhoog.
 
+## v1.6.6 — 6 oktober 2026
+
+### Gewijzigd
+- **Backup-retentie ingekort** — dagelijkse auto-backups worden nu 7 dagen bewaard (was 30). Daarnaast blijven de zondag-backups van de laatste 12 weken en de maandeinde-backups van de laatste 12 maanden bewaard. Oudere dagelijkse backups worden bij de eerstvolgende auto-backup opgeruimd.
+
 ## v1.6.5 — 5 oktober 2026
 
 ### Gewijzigd
