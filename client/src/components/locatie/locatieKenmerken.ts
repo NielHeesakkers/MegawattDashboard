@@ -11,6 +11,9 @@ export const OMGEVING_PRESETS: ReadonlyArray<Optie> = [
   { key: 'park', label: 'Park' },
   { key: 'plein', label: 'Plein' },
   { key: 'stationsplein', label: 'Stationsplein' },
+  { key: 'winkelcentrum', label: 'Winkelcentrum' },
+  { key: 'kerstmarkt', label: 'Kerstmarkt' },
+  { key: 'event', label: 'Event' },
 ];
 
 // Enkelvoudig, extensible.
@@ -29,8 +32,10 @@ export const STROOMVOORZIENING_PRESETS: ReadonlyArray<Optie> = [
 
 // Enkelvoudig, gesloten, GEORDEND (index stuurt de drempel ≤ filter aan).
 export const AANVRAAGTIJD_OPTIONS: ReadonlyArray<Optie> = [
+  { key: '1_week', label: '1 week' },
   { key: '2_weken', label: '2 weken' },
   { key: '4_weken', label: '4 weken' },
+  { key: '6_weken', label: '6 weken' },
   { key: '8_weken', label: '8 weken' },
   { key: 'langer', label: 'Langer' },
 ];
@@ -50,6 +55,7 @@ export const DOELGROEP_PRESETS: ReadonlyArray<Optie> = [
   { key: '35-50', label: '35 – 50' },
   { key: '50+', label: '50+' },
   { key: 'gezinnen', label: 'Gezinnen' },
+  { key: 'ondernemers', label: 'Ondernemers' },
 ];
 
 // Meervoudig, extensible.
@@ -64,6 +70,8 @@ export const EVENT_TYPE_PRESETS: ReadonlyArray<Optie> = [
   { key: 'luchthavens', label: 'Luchthavens' },
   { key: 'parken', label: 'Parken' },
   { key: 'event_locatie', label: 'Event locatie' },
+  { key: 'stadscentra', label: 'Stadscentra' },
+  { key: 'kerstmarkt', label: 'Kerstmarkt' },
 ];
 
 // Geordende key-lijsten voor de drempel-filters.

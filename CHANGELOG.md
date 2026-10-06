@@ -3,6 +3,11 @@
 Alle noemenswaardige wijzigingen aan het Megawatt Dashboard.
 Vanaf 1.6.0 per release `+0.0.1` omhoog.
 
+## v1.6.7 — 6 oktober 2026
+
+### Toegevoegd
+- **Extra vaste keuzes voor locatiekenmerken** — omgevingstype: Winkelcentrum, Kerstmarkt, Event; aanvraagtijd: 1 week en 6 weken (in de juiste volgorde voor het drempelfilter); event type: Stadscentra, Kerstmarkt; doelgroep: Ondernemers. Eerder als eigen waarde ingevoerde varianten zijn omgezet naar deze vaste keuzes.
+
 ## v1.6.6 — 6 oktober 2026
 
 ### Gewijzigd

@@ -414,7 +414,7 @@ export interface LocationCost {
   order: number;
 }
 
-export type OmgevingType = 'centrum' | 'winkelstraat' | 'park' | 'plein' | 'stationsplein';
+export type OmgevingType = 'centrum' | 'winkelstraat' | 'park' | 'plein' | 'stationsplein' | 'winkelcentrum' | 'kerstmarkt' | 'event';
 export type Orientatie = 'N' | 'NO' | 'O' | 'ZO' | 'Z' | 'ZW' | 'W' | 'NW';
 export type EigendomType = 'particulier' | 'gemeentelijk' | 'bedrijf';
 

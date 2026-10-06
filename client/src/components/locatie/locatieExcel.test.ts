@@ -22,14 +22,14 @@ describe('locatieExcel', () => {
     const { ok, fouten } = rowsToLocations([
       ['Naam', 'Land', 'Adres', 'Omgevingstype', 'Stroom aanwezig', 'Volume sampling', 'Event type', 'Oppervlakte (m²)', 'Notities'],
       ['Voorbeeld', 'Nederland', 'X 1', '', '', '', '', '', 'Voorbeeldrij — verwijder'],
-      ['Markt', 'Nederland', 'Markt 1, Breda', 'Plein', 'Ja', '5.001 - 10.000', 'Festivals, Kerstmarkt, anders', '40', ''],
+      ['Markt', 'Nederland', 'Markt 1, Breda', 'Plein', 'Ja', '5.001 - 10.000', 'Festivals, Braderie, anders', '40', ''],
       ['Leeg adres', 'Nederland', '', '', '', '', '', '', ''],
     ]);
     expect(fouten).toEqual([{ rij: 4, fout: 'Adres ontbreekt' }]);
     expect(ok).toHaveLength(1);
     expect(ok[0].input).toMatchObject({
       omgevingType: 'plein', stroom: true, volumeSampling: '5001-10000',
-      eventTypes: ['festivals', 'Kerstmarkt'], m2: 40, eigendomType: 'particulier', orientatie: 'N',
+      eventTypes: ['festivals', 'Braderie'], m2: 40, eigendomType: 'particulier', orientatie: 'N',
     });
   });
 
@@ -40,13 +40,13 @@ describe('locatieExcel', () => {
       truckBereikbaar: true, vergunningNodig: false, vergunningLink: null, geschiktActivatie: false,
       geschiktSampling: true, geschiktHotspot: false, geschiktAnder: null, lengte: 10, breedte: 4, m2: 40,
       notities: 'A & B', stroomvoorzieningTypes: ['stroomput'], aanvraagtijd: '4_weken', volumeSampling: '10000+',
-      doelgroepen: ['gezinnen'], eventTypes: ['festivals', 'Kerstmarkt'],
+      doelgroepen: ['gezinnen'], eventTypes: ['festivals', 'Braderie'],
     } as unknown as Location;
     const { ok } = rowsToLocations(parseXlsx(locationsToXlsx([loc])));
     expect(ok[0].input).toMatchObject({
       naam: 'Markt <Breda>', omgevingType: 'plein', orientatie: 'Z', eigendomType: 'gemeentelijk', stroom: true,
       stroomvoorzieningTypes: ['stroomput'], aanvraagtijd: '4_weken', volumeSampling: '10000+',
-      doelgroepen: ['gezinnen'], eventTypes: ['festivals', 'Kerstmarkt'], m2: 40, notities: 'A & B',
+      doelgroepen: ['gezinnen'], eventTypes: ['festivals', 'Braderie'], m2: 40, notities: 'A & B',
     });
   });
 });
